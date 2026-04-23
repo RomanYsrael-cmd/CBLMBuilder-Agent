@@ -1,6 +1,6 @@
 ---
 name: cblm_generator
-description: Generate one TESDA-style CBLM DOCX per syllabus learning outcome and fill the CBLM template automatically.
+description: Generate TESDA-style CBLM DOCX files from modular section templates, one unit at a time.
 metadata:
   openclaw:
     requires:
@@ -11,7 +11,7 @@ metadata:
 This is a checkpointed autonomous task.
 
 - Do NOT ask for confirmation
-- Do NOT ask how to proceed
+- Do NOT ask how to proceed when the next step is clear
 - Do NOT send unnecessary messages
 
 Immediately execute the workflow when triggered if it can be completed reliably.
@@ -30,24 +30,28 @@ Use this skill when a syllabus file exists in `./inbox` and the goal is to gener
 ## Required Extraction
 Read the syllabus and extract:
 - course title
-- all learning outcomes
-- topics under each learning outcome
-- subtopics under each topic
+- all units of competency
+- all learning outcomes under the current unit
+- topics and subtopics needed to derive content items
 
-## Required Mapping
-Map the syllabus to the template as follows:
-- Course Title -> `qualification_title`
-- One syllabus learning outcome -> one `unit_of_competency` -> one output DOCX
-- Topics -> `LO_1`, `LO_2`, `LO_3`
-- Subtopics -> `Contents_1_1..Contents_3_3`
+## Required Output Model
+
+Build one structured payload for the current unit using the schema documented in `BOOTSTRAP.md`.
+
+Do not build the old flat payload model with:
+- `LO_1`
+- `Contents_1_1`
+- `la_1_1_title`
+
+unless explicitly required for legacy compatibility.
 
 ## Generation Requirements
-For each content generate:
-1. Key Facts:
+
+For each content item generate:
+1. Key Facts
    - Minimum 600 words
    - Preferably 650-800 words
-   - Must include explanation, examples, and application context
-   - Must be paragraph-based, not bullet-only
+   - Paragraph-based, not bullet-only
    - Maintain an instructional TESDA-style tone
    - Include:
      1. concept overview
@@ -55,10 +59,8 @@ For each content generate:
      3. real-world example
      4. industry/workplace application
      5. summary/reinforcement
-   - Each Key Facts section must be materially distinct from the others in the same payload
-   - Anchor each section to its exact content title and subtopics, not just the parent topic
-   - Vary the opening, example, workflow context, and summary language across contents
-   - Do not reuse the same sentence pattern with only term substitutions
+   - Keep each Key Facts section materially distinct from the others in the same unit
+   - Anchor each section to its exact content title and subtopics
    - Avoid generic filler that could fit any content title
 2. Let's Exercise
    - exactly 10 multiple choice questions
@@ -70,55 +72,43 @@ For each content generate:
    - Equipment
    - Steps/Procedure
    - Assessment Method
-4. Performance Criteria Checklist
-   - exactly 5 criteria
-
-## Template Fit Rules
-The template is fixed-width.
-- Use up to 3 learning outcomes
-- Use up to 3 contents
-- Merge closely related items when necessary
+   - exactly 5 performance criteria
 
 ## Validation
-Before calling the filler script, verify:
+
+Before assembly, verify:
 - required payload fields exist
-- 10 MCQs per exercise
-- 5 performance criteria per checklist
-- no critical placeholder is missing without a reasonable generated substitute
-- Module_Descriptor is 80-120 words
-- unit_of_competency_code_X follows `[A-Z]{3}-[A-Z]{3}-[0-9]{3}`
-- Laboratory is not empty
-- uc_no is an integer from 1 to 4
-- Key Facts sections in the same payload are not near-duplicates
+- `Module_Descriptor` is 80-120 words
+- `Laboratory` is not empty
+- `training_materials` is not empty
+- each Key Facts section has at least 600 words
+- each answer key has 10 items
+- each Let's Apply block has 5 performance criteria
+- Key Facts sections in the same unit are not near-duplicates
 
 Use a draft-first workflow:
 - save the payload JSON first
-- run validation before filling the template
+- run validation before assembly
 - if the similarity checker flags redundancy, rewrite only the flagged Key Facts sections once
 - rerun the checker after the rewrite
-- if redundancy still remains, treat the run as failed instead of filling the DOCX
+- if redundancy still remains, treat the run as failed instead of assembling the DOCX
 - if the task cannot be completed reliably in one pass, stop after saving valid intermediate state and wait for `continue`
 
 Authoring rule:
-- draft the current unit payload directly from the current learning outcome, topics, and subtopics
+- draft the current unit payload directly from the current unit, current LOs, and current content items
 - do not use a generic multi-unit generator that mass-produces all payloads with the same rhetorical template
 - do not use a batch rewrite script that rewrites every Key Facts field in the same style across units
-- ensure the current unit remains materially different in content, examples, and explanation from other units in the syllabus
 
 ## Generation Step
-Create one JSON payload per unit of competency, then run:
 
-`powershell -ExecutionPolicy Bypass -File .\tools\run_fill_cblm.ps1 "./templates/CBLM Template.docx" "<payload.json>" "<output.docx>"`
-
-This still uses `tools/fill_cblm.py` as the production filler, but routes through the project venv when available.
-
-Before filling the template, run:
-
-`.\.venv\Scripts\python.exe .\tools\check_keyfacts_similarity.py "<payload.json>"`
-
-If the checker flags repetition, rewrite the overlapping Key Facts sections once, save the updated payload, and rerun the checker before filling the DOCX.
+1. Build one structured payload JSON for the current unit
+2. Run:
+   `.\.venv\Scripts\python.exe .\tools\check_keyfacts_similarity.py "<payload.json>"`
+3. If validation passes, run:
+   `.\.venv\Scripts\python.exe .\tools\assemble_cblm.py "<payload.json>" "<output.docx>"`
 
 ## Finalization
+
 - save outputs in `./output`
 - move processed syllabus to `./processed`
 - avoid duplicate work on already processed files
@@ -127,14 +117,12 @@ If the checker flags repetition, rewrite the overlapping Key Facts sections once
 ## Failure Handling
 
 If extraction or generation fails:
-
 - STOP immediately
-- do not attempt regeneration
+- do not attempt regeneration automatically
 - mark file as failed
-- do not loop or retry
 
 Special case for Key Facts redundancy:
-- one rewrite pass is allowed before the file is considered failed
+- one rewrite pass is allowed before the unit is considered failed
 - do not perform more than one redundancy rewrite cycle
 
 Pause behavior:

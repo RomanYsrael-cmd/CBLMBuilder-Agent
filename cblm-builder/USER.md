@@ -1,16 +1,14 @@
 # User Task Contract
 
-When a syllabus file is available in ./inbox:
+When a syllabus file is available in `./inbox`:
 
 - extract course title
-- extract all learning outcomes
-- extract topics under each learning outcome
-- extract subtopics under each topic
-- generate one CBLM document per learning outcome
-- save and validate each payload before filling the template
+- extract all units, learning outcomes, topics, and subtopics needed for the current unit
+- generate one CBLM document per unit of competency
+- save and validate one structured unit payload before DOCX assembly
 - if Key Facts redundancy is detected, regenerate the flagged Key Facts sections once before continuing
 - work on one unit at a time instead of generating all unit payloads in one batch
 - after finishing one unit, pause for user continuation unless fully automatic continuation was explicitly requested
-- fill the official template
-- save outputs in ./output
-- move processed syllabus files into ./processed
+- assemble the official CBLM from the modular section templates
+- save outputs in `./output`
+- move processed syllabus files into `./processed` only after all required units are completed
