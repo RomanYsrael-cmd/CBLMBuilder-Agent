@@ -1,0 +1,84 @@
+Course Title:
+Business Process Management
+
+Course Code:
+IPC 5
+
+Learning Outcome 1 (LO1):
+Categorize the foundational theories of BPM and differentiate the stages of the Business Process Lifecycle.
+
+Topics under LO1:
+1. Evolution and Principles of BPM
+   - History of Process Management
+   - Process-Centered Organization
+   - BPM vs Project Management
+
+2. Business Process Lifecycle
+   - Discovery and Modeling
+   - Analysis and Redesign
+   - Implementation and Monitoring
+
+3. Foundations of BPM
+   - Role of BPM in Organizations
+   - Strategic Alignment
+   - Continuous Improvement Concepts
+
+
+Learning Outcome 2 (LO2):
+Construct professional-grade process models using BPMN 2.0 to represent "As-Is" and "To-Be" organizational workflows.
+
+Topics under LO2:
+1. BPMN Basic Syntax
+   - Events (Start, Intermediate, End)
+   - Activities and Tasks
+   - Gateways (Exclusive, Parallel, Inclusive)
+
+2. Advanced Modeling Objects
+   - Pools and Lanes
+   - Sub-processes and Call Activities
+   - Data Objects and Data Stores
+
+3. As-Is vs To-Be Modeling
+   - Current State Documentation
+   - Visualization of Improvements
+   - Gap Analysis Techniques
+
+
+Learning Outcome 3 (LO3):
+Perform quantitative and qualitative process analysis to identify bottlenecks, waste, and automation opportunities.
+
+Topics under LO3:
+1. Qualitative Process Analysis
+   - Value-Added Analysis
+   - Root Cause Analysis
+   - Waste Identification
+
+2. Quantitative Process Analysis
+   - Flow Analysis and Cycle Time
+   - Little’s Law
+   - Process Simulation
+
+3. Process Redesign Heuristics
+   - Parallelism and Resequencing
+   - Task Elimination
+   - System Integration for Efficiency
+
+
+Learning Outcome 4 (LO4):
+Formulate a comprehensive process improvement plan that integrates workflow automation and performance monitoring systems.
+
+Topics under LO4:
+1. Process Automation and Workflow Systems
+   - BPM Systems (BPMS)
+   - Robotic Process Automation (RPA)
+   - Service-Oriented Architecture
+
+2. Performance Monitoring and Analytics
+   - Process Mining
+   - Key Performance Indicators
+   - Real-time Dashboards
+
+3. Governance and Continuous Improvement
+   - Six Sigma and TQM
+   - Process Governance Roles
+   - Sustaining Improvements

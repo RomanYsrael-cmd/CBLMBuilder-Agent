@@ -1,0 +1,81 @@
+Course Title:
+System Analysis and Design
+
+Learning Outcome 1 (LO1):
+Comprehend the various SDLC models and the foundational role of the systems analyst in organizational growth.
+
+Topics under LO1:
+1. System Development Life Cycle (SDLC)
+   - Waterfall vs Agile Methodologies
+   - Phases of SDLC
+   - Role of the Systems Analyst
+
+2. System Planning and Feasibility
+   - Technical, Economic, and Operational Feasibility
+   - Fact-Finding Techniques
+   - Cost-Benefit Analysis
+
+3. Fundamentals of System Analysis
+   - Importance of System Analysis
+   - Organizational Impact
+   - Strategic Alignment
+
+
+Learning Outcome 2 (LO2):
+Execute effective requirements elicitation and document functional specifications using industry-standard modeling techniques.
+
+Topics under LO2:
+1. Requirements Elicitation and Modeling
+   - Joint Application Development (JAD)
+   - Functional vs Non-functional Requirements
+   - Use Case Diagrams
+
+2. Process Modeling with DFDs
+   - DFD Levels (0, 1, 2)
+   - Symbols and Rules
+   - Logical vs Physical DFDs
+
+3. Logic and Data Modeling
+   - Decision Trees and Decision Tables
+   - Entity Relationship Diagrams (ERD)
+   - Normalization Fundamentals
+
+
+Learning Outcome 3 (LO3):
+Develop comprehensive system designs including data structures, user interfaces, and process architectures.
+
+Topics under LO3:
+1. UI/UX Design
+   - Human-Computer Interaction Principles
+   - Wireframing and Prototyping
+   - Input/Output Design Standards
+
+2. Database and Architecture Design
+   - File and Database Structures
+   - System Architecture (Client-Server, Cloud)
+   - API and Integration Design
+
+3. System Security and Integrity
+   - Internal Controls Design
+   - Audit Trails
+   - Data Validation and Error Handling
+
+
+Learning Outcome 4 (LO4):
+Critique and validate system designs through usability testing and performance evaluation to ensure strategic alignment.
+
+Topics under LO4:
+1. System Implementation and Conversion
+   - Testing Strategies (Unit, Integration, System)
+   - Conversion Methods (Direct, Parallel, Phased)
+   - Documentation Requirements
+
+2. Evaluation and Usability Testing
+   - Post-Implementation Review
+   - Usability Metrics
+   - User Acceptance Testing (UAT)
+
+3. Maintenance and System Obsolescence
+   - Types of Maintenance (Corrective, Adaptive, Perfective)
+   - Legacy Systems
+   - Managing System Retirement

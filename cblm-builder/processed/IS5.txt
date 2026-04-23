@@ -1,0 +1,107 @@
+Course Title
+
+Enterprise Resource Planning
+Laboratory: Computer Lab
+Course Code: IS5
+
+LO1
+
+Explain the fundamental concepts, components, and objectives of ERP systems in organizations.
+
+Topics under LO1
+Introduction to ERP Systems
+ERP Architecture and Components
+Subtopics
+
+1. Introduction to ERP Systems
+
+Definition and evolution of ERP
+Objectives and benefits of ERP systems
+ERP vs traditional systems
+
+2. ERP Architecture and Components
+
+ERP architecture (centralized vs distributed)
+Core components of ERP systems
+Role of databases in ERP
+LO2
+
+Identify ERP modules and explain their roles in integrating business processes across functional areas.
+
+Topics under LO2
+Financial and Accounting Modules
+Human Resource and Customer Management Modules
+Manufacturing and Supply Chain Modules
+Subtopics
+
+1. Financial and Accounting Modules
+
+General ledger and financial reporting
+Accounts payable and receivable
+Budgeting and financial control
+
+2. Human Resource and Customer Management Modules
+
+HR management systems
+Payroll and employee records
+Customer relationship management integration
+
+3. Manufacturing and Supply Chain Modules
+
+Production planning
+Inventory management
+Logistics and supply chain coordination
+LO3
+
+Apply ERP concepts to understand business process integration and information flow.
+
+Topics under LO3
+Business Process Integration
+Data Consistency and Information Flow
+ERP Configuration and Customization
+Subtopics
+
+1. Business Process Integration
+
+End-to-end business processes
+Workflow automation
+Interdepartmental coordination
+
+2. Data Consistency and Information Flow
+
+Centralized data management
+Data accuracy and integrity
+Real-time reporting
+
+3. ERP Configuration and Customization
+
+System configuration basics
+Customization vs standardization
+User roles and access control
+LO4
+
+Analyze ERP implementation, challenges, and performance to evaluate and improve ERP systems.
+
+Topics under LO4
+ERP Implementation Life Cycle
+ERP Challenges and Risks
+ERP Evaluation and Improvement
+Subtopics
+
+1. ERP Implementation Life Cycle
+
+Planning and selection
+Implementation phases
+Testing and deployment
+
+2. ERP Challenges and Risks
+
+Organizational resistance
+Cost and complexity
+Technical and operational risks
+
+3. ERP Evaluation and Improvement
+
+Performance metrics
+System effectiveness
+Continuous improvement strategies

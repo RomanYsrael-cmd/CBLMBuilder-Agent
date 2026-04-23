@@ -1,0 +1,84 @@
+Course Title:
+Supply Chain Management
+
+Course Code:
+IPE 10
+
+Learning Outcome 1 (LO1):
+Comprehend the strategic role of SCM and the impact of integrated information systems on organizational flow.
+
+Topics under LO1:
+1. Evolution and Strategy of SCM
+   - Internal vs. External Supply Chains
+   - The Bullwhip Effect
+   - Competitive Advantage through SCM
+
+2. Digital Supply Chain Infrastructure
+   - Enterprise Resource Planning (ERP)
+   - Electronic Data Interchange (EDI)
+   - IoT and Blockchain in Traceability
+
+3. Foundations of Supply Chain Management
+   - Strategic Role of SCM
+   - Organizational Flow Integration
+   - Information Systems Support
+
+
+Learning Outcome 2 (LO2):
+Execute operational planning for procurement and inventory management using quantitative and qualitative optimization techniques.
+
+Topics under LO2:
+1. Strategic Sourcing and Procurement
+   - Supplier Selection and Evaluation
+   - E-procurement Systems
+   - Contract Management and Ethics
+
+2. Inventory Management Models
+   - Economic Order Quantity (EOQ)
+   - Just-in-Time vs. Just-in-Case
+   - Safety Stock Calculation
+
+3. Material Requirements Planning (MRP)
+   - Bill of Materials (BOM)
+   - Master Production Schedule (MPS)
+   - Capacity Requirement Planning
+
+
+Learning Outcome 3 (LO3):
+Develop integrated logistics and distribution workflows that maximize customer value while minimizing carbon footprint.
+
+Topics under LO3:
+1. Transportation and Logistics Management
+   - Intermodal Transportation
+   - Last-Mile Delivery Challenges
+   - Third-Party Logistics (3PL) and 4PL
+
+2. Warehousing and Distribution Center Operations
+   - Warehouse Layout Design
+   - Cross-Docking Strategies
+   - Automated Storage and Retrieval Systems
+
+3. Green Supply Chain and Circular Economy
+   - Reverse Logistics
+   - Reducing Carbon Footprint in Shipping
+   - Sustainable Packaging Solutions
+
+
+Learning Outcome 4 (LO4):
+Critique supply chain resilience and performance using data-driven analytics to mitigate risks and propose sustainable improvements.
+
+Topics under LO4:
+1. Supply Chain Risk Management
+   - Identifying Global Disruptions
+   - Contingency Planning
+   - Resiliency vs. Robustness
+
+2. SCM Performance Measurement
+   - SCOR Model
+   - Key Performance Indicators in Logistics
+   - Benchmarking
+
+3. Continuous Improvement and Future Trends
+   - Lean and Six Sigma in SCM
+   - Artificial Intelligence and Predictive Analytics
+   - Globalization vs. Regionalization

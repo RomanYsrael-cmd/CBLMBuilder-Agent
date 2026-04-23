@@ -1,0 +1,81 @@
+Course Code:
+IS 6
+
+Learning Outcome 1 (LO1):
+Explain the principles, roles, and processes involved in contact center and IT service management operations.
+
+Topics under LO1:
+1. Contact Center Operations
+   - Definition and Functions
+   - Types of Services
+   - Roles of Service Agents
+
+2. Customer Communication Principles
+   - Effective Communication Techniques
+   - Active Listening and Empathy
+   - Professional Standards
+
+3. Service Management Foundations
+   - IT Service Management Concepts
+   - Role of IS in Services
+   - Operational Efficiency
+
+
+Learning Outcome 2 (LO2):
+Demonstrate guided customer service interactions using appropriate language, communication techniques, and service protocols.
+
+Topics under LO2:
+1. Customer Service Protocols
+   - Greeting Customers
+   - Identifying Concerns
+   - Call Closing Procedures
+
+2. Service Communication Skills
+   - Basic English Communication
+   - Tone and Clarity
+   - Handling Inquiries
+
+3. Handling Customer Requests
+   - Order Taking Procedures
+   - Responding to Inquiries
+   - Providing Accurate Information
+
+
+Learning Outcome 3 (LO3):
+Apply customer service procedures to resolve inquiries, complaints, and service requests in contact center environments.
+
+Topics under LO3:
+1. Managing Customer Inquiries
+   - Identifying Needs
+   - Providing Solutions
+   - Escalation Procedures
+
+2. Handling Customer Complaints
+   - Complaint Handling Process
+   - Conflict Resolution Techniques
+   - Maintaining Professionalism
+
+3. Outbound Telemarketing
+   - Telemarketing Principles
+   - Customer Follow-ups
+   - Ethical Sales Communication
+
+
+Learning Outcome 4 (LO4):
+Evaluate customer service interactions and apply improvements to ensure service quality and customer satisfaction.
+
+Topics under LO4:
+1. Service Quality Standards
+   - Customer Satisfaction Indicators
+   - Performance Metrics
+   - Continuous Improvement
+
+2. Professionalism in Customer Service
+   - Work Ethics
+   - Time Management
+   - Team Collaboration
+
+3. Improving Customer Experience
+   - Feedback Analysis
+   - Service Recovery Strategies
+   - CRM Best Practices
