@@ -3,7 +3,11 @@
 When a syllabus file is available in `./inbox`:
 
 - extract course title
-- extract all units, learning outcomes, topics, and subtopics needed for the current unit
+- map the syllabus exactly as:
+  - syllabus LO -> CBLM UC
+  - syllabus Topic -> CBLM LO
+  - syllabus Subtopic -> CBLM Content
+- extract all learning outcomes, topics, and subtopics needed for the current unit
 - generate one CBLM document per unit of competency
 - save and validate one structured unit payload before DOCX assembly
 - if Key Facts redundancy is detected, regenerate the flagged Key Facts sections once before continuing

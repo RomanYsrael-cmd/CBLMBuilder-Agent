@@ -30,13 +30,23 @@ Use this skill when a syllabus file exists in `./inbox` and the goal is to gener
 ## Required Extraction
 Read the syllabus and extract:
 - course title
-- all units of competency
-- all learning outcomes under the current unit
-- topics and subtopics needed to derive content items
+- all syllabus learning outcomes
+- the topics under each syllabus learning outcome
+- the subtopics under each topic
+
+Mapping rule:
+- syllabus learning outcome -> CBLM unit of competency
+- syllabus topic -> CBLM learning outcome
+- syllabus subtopic -> CBLM content item
 
 ## Required Output Model
 
 Build one structured payload for the current unit using the schema documented in `BOOTSTRAP.md`.
+
+Interpret that payload as:
+- `current_unit` = one syllabus learning outcome
+- `current_unit.learning_outcomes[]` = the topics under that syllabus learning outcome
+- `current_unit.learning_outcomes[].contents[]` = the subtopics under each topic
 
 Do not build the old flat payload model with:
 - `LO_1`
@@ -95,9 +105,11 @@ Use a draft-first workflow:
 - if the task cannot be completed reliably in one pass, stop after saving valid intermediate state and wait for `continue`
 
 Authoring rule:
-- draft the current unit payload directly from the current unit, current LOs, and current content items
+- draft the current unit payload directly from the current syllabus learning outcome, its topics, and their subtopics
 - do not use a generic multi-unit generator that mass-produces all payloads with the same rhetorical template
 - do not use a batch rewrite script that rewrites every Key Facts field in the same style across units
+- do not create local phrase-bank or slot-filling scripts that manufacture Key Facts prose from reusable sentence fragments
+- a local helper script may save already-authored JSON, but it must not be the thing that invents the instructional content
 
 ## Generation Step
 
@@ -124,9 +136,11 @@ If extraction or generation fails:
 Special case for Key Facts redundancy:
 - one rewrite pass is allowed before the unit is considered failed
 - do not perform more than one redundancy rewrite cycle
+- if the failed draft was produced by a synthetic local prose generator, pause instead of marking the source failed and wait for `continue`
 
 Pause behavior:
 - do not claim success for a partial run
 - do not silently reduce quality requirements to finish faster
+- if the model is about to switch into script-generated prose because the unit is too large, stop before doing that and wait for `continue`
 - when paused, report completed work, remaining work, and whether it is safe to continue
 - when the user says `continue`, resume from saved state instead of starting over

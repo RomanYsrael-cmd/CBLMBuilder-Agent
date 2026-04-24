@@ -1,0 +1,91 @@
+Course Title:
+Introduction to Computing
+
+Course Code:
+IPC 1
+
+Learning Outcome 1 (LO1):
+Identify the fundamental components of web development, including HTML structure, CSS styling, and basic JavaScript functionality.
+
+Topics under LO1:
+1. Introduction to Web Development
+
+Subtopics:
+   - HTML, CSS, JavaScript roles
+   - Web structure overview
+   - Basic web components
+
+2. Basic HTML Concepts
+Subtopics:
+   - HTML structure (doctype, html, head, body)
+   - Tags and elements
+   - Text and content elements (headings, paragraphs, lists, links)
+
+
+Learning Outcome 2 (LO2):
+Apply foundational HTML techniques to structure content for a simple webpage.
+
+Topics under LO2:
+1. HTML Layout Elements
+Subtopics:
+   - Header, nav, section, article, footer
+   - Page structure design
+   - Semantic HTML
+
+2. Forms and Input
+Subtopics:
+   - Input fields
+   - Forms and buttons
+   - Labels and user interaction
+
+3. Multimedia Integration
+Subtopics:
+   - Images
+   - Video
+   - Audio
+
+
+Learning Outcome 3 (LO3):
+Use CSS to style and format web pages for improved design and usability.
+
+Topics under LO3:
+1. CSS Basics
+Subtopics:
+   - Inline, internal, external CSS
+   - Selectors (class, id)
+   - Styling text and elements
+
+2. CSS Layout and Box Model
+Subtopics:
+   - Margin, padding, border
+   - Layout structuring
+   - Spacing and alignment
+
+3. Responsive Design
+Subtopics:
+   - Flexbox basics
+   - Simple responsive layouts
+   - Adapting for different screens
+
+
+Learning Outcome 4 (LO4):
+Develop and test simple interactive web pages using basic JavaScript and present them with proper formatting and documentation.
+
+Topics under LO4:
+Subtopics:
+1. JavaScript Basics
+   - Variables
+   - Output
+   - Script usage
+
+2. User Interaction
+Subtopics:
+   - Events (click, input)
+   - Dynamic changes
+   - Interactive elements
+
+3. Debugging and Code Organization
+Subtopics:
+   - Browser developer tools
+   - Debugging techniques
+   - Code comments and organization

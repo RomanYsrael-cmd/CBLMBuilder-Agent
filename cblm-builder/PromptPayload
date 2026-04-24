@@ -1,5 +1,5 @@
 FOR CODEX:
-Read and follow these workspace instruction files before doing anything:
+Read and follow these workspace instruction files before doing anything. If one is missing, continue with the files that exist:
 
 AGENTS.md
 BOOTSTRAP.md
@@ -26,23 +26,31 @@ General rules:
 
 Workflow:
 1. Read the syllabus from `./inbox`.
-2. Extract the qualification title, all units of competency, and the current unit’s learning outcomes, topics, and subtopics.
-3. Build one structured payload JSON for the current unit only, using the schema defined in `BOOTSTRAP.md`.
-4. Save the draft payload JSON in `./state/payloads`.
-5. Validate the payload completely before DOCX assembly.
-6. Ensure every Key Facts section meets the workspace requirements for length, structure, specificity, and distinctness.
-7. Run:
+2. Map the syllabus exactly as:
+   - one syllabus learning outcome = one CBLM Unit of Competency
+   - one syllabus topic under that learning outcome = one CBLM Learning Outcome
+   - one syllabus subtopic under that topic = one CBLM content item
+3. Extract the qualification title, all syllabus learning outcomes, the topics under the current syllabus learning outcome, and the subtopics under those topics.
+4. Build one structured payload JSON for the current unit only, using the repo schema.
+5. In that structured payload:
+   - `current_unit` must represent one syllabus learning outcome
+   - `current_unit.learning_outcomes[]` must represent the topics under that syllabus learning outcome
+   - `current_unit.learning_outcomes[].contents[]` must represent the subtopics under each topic
+6. Save the draft payload JSON in `./state/payloads`.
+7. Validate the payload completely before DOCX assembly.
+8. Ensure every Key Facts section meets the workspace requirements for length, structure, specificity, and distinctness.
+9. Run:
    `.\.venv\Scripts\python.exe .\tools\check_keyfacts_similarity.py "<payload.json>"`
-8. If redundancy is flagged, rewrite only the flagged Key Facts sections once, save the payload again, and rerun the checker.
-9. If the second similarity check still fails, stop and treat the current unit as failed according to the workspace rules.
-10. If validation passes, generate the DOCX for the current unit with:
+10. If redundancy is flagged, rewrite only the flagged Key Facts sections once, save the payload again, and rerun the checker.
+11. If the second similarity check still fails, stop and treat the current unit as failed according to the workspace rules.
+12. If validation passes, generate the DOCX for the current unit with:
     `.\.venv\Scripts\python.exe .\tools\assemble_cblm.py "<payload.json>" "<output.docx>"`
-11. Save the generated DOCX in `./output`.
-12. After one unit is successfully completed, pause and report status.
-13. Wait for me to say `continue` before starting the next unit.
-14. When I say `continue`, resume from saved state instead of restarting from scratch.
-15. Move the source file to `./processed` only after all required units are successfully completed.
-16. If all units succeed, create `./output/CBLM_FULL.docx`.
+13. Save the generated DOCX in `./output`.
+14. After one unit is successfully completed, pause and report status.
+15. Wait for me to say `continue` before starting the next unit.
+16. When I say `continue`, resume from saved state instead of restarting from scratch.
+17. Move the source file to `./processed` only after all required units are successfully completed.
+18. If all units succeed, create `./output/CBLM_FULL.docx`.
 
 Quality rules:
 - Do not lower quality requirements to finish faster.
@@ -52,6 +60,10 @@ Quality rules:
 - Draft the current unit from its own learning outcomes, topics, and subtopics.
 - Make each unit materially different from the others in explanation, examples, and workplace application.
 - Do not claim full success for the syllabus after completing only one unit.
+- Do not create local phrase-bank, variant-array, or slot-filling scripts to manufacture Key Facts prose.
+- If saving the payload requires a helper script because of shell length limits, use that script only to serialize content already authored in this run.
+- If you are about to rely on a programmatic prose generator to finish the unit, stop cleanly, save valid intermediate state, and wait for `continue` instead of forcing a low-quality draft.
+- If a similarity failure came from a synthetic generated draft, do not move the source file to `./failed`; keep it in `./inbox`, report the problem, and wait for `continue`.
 
 If you must pause, report:
 - what unit was completed
