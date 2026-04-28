@@ -131,7 +131,7 @@ Run:
 Then validate generated image files referenced by key_facts_image_path are PNG or JPG (by extension and basic file signature). If not valid, STOP and report (do not assemble).
 Assemble DOCX:
 .\.venv\Scripts\python.exe .\tools\assemble_cblm.py "<payload.json>" "<output.docx>"
-Save output in ./output.
+Save output in ./output.,
 After one unit completes, PAUSE and report status; wait for me to say continue.
 Execute the first unit now.
 
