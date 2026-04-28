@@ -10,68 +10,132 @@ SOUL.md
 HEARTBEAT.md
 IDENTITY.md
 
-Assume this is a clean workspace with exactly one valid syllabus file in `./inbox`.
+Env setup (PowerShell):
+
+If .env exists at repo root, load it into the current process environment (do NOT echo values):
+For each non-empty, non-comment line containing =:
+split on the first = into key and value
+trim whitespace
+strip surrounding quotes from value if present
+set Env:key = value
+Ensure .gitignore includes .env (create it if missing). Never commit .env.
+Assume this is a clean workspace with exactly one valid syllabus file in ./inbox.
 
 Now execute the repository workflow with these rules:
 
 General rules:
-- Work on only that one syllabus file.
-- Do not ask me unnecessary questions.
-- Prefer `.\.venv\Scripts\python.exe` for Python commands.
-- Use up to 600000 ms timeout for long-running terminal commands.
-- Use the modular templates in `./templates`.
-- Use `tools/assemble_cblm.py` as the production assembler.
-- Do not use the old monolithic `CBLM Template.docx` workflow unless I explicitly request legacy mode.
-- Follow the workspace files as the source of truth.
 
+Work on only that one syllabus file.
+Do not ask me unnecessary questions.
+Prefer .\.venv\Scripts\python.exe for Python commands.
+Use up to 600000 ms timeout for long-running terminal commands.
+Use the modular templates in ./templates.
+Use tools/assemble_cblm.py as the production assembler.
+Do not use the old monolithic CBLM Template.docx workflow unless I explicitly request legacy mode.
+Follow the workspace files as the source of truth.
 Workflow:
-1. Read the syllabus from `./inbox`.
-2. Map the syllabus exactly as:
-   - one syllabus learning outcome = one CBLM Unit of Competency
-   - one syllabus topic under that learning outcome = one CBLM Learning Outcome
-   - one syllabus subtopic under that topic = one CBLM content item
-3. Extract the qualification title, all syllabus learning outcomes, the topics under the current syllabus learning outcome, and the subtopics under those topics.
-4. Build one structured payload JSON for the current unit only, using the repo schema.
-5. In that structured payload:
-   - `current_unit` must represent one syllabus learning outcome
-   - `current_unit.learning_outcomes[]` must represent the topics under that syllabus learning outcome
-   - `current_unit.learning_outcomes[].contents[]` must represent the subtopics under each topic
-6. Save the draft payload JSON in `./state/payloads`.
-7. Validate the payload completely before DOCX assembly.
-8. Ensure every Key Facts section meets the workspace requirements for length, structure, specificity, and distinctness.
-9. Run:
-   `.\.venv\Scripts\python.exe .\tools\check_keyfacts_similarity.py "<payload.json>"`
-10. If redundancy is flagged, rewrite only the flagged Key Facts sections once, save the payload again, and rerun the checker.
-11. If the second similarity check still fails, stop and treat the current unit as failed according to the workspace rules.
-12. If validation passes, generate the DOCX for the current unit with:
-    `.\.venv\Scripts\python.exe .\tools\assemble_cblm.py "<payload.json>" "<output.docx>"`
-13. Save the generated DOCX in `./output`.
-14. After one unit is successfully completed, pause and report status.
-15. Wait for me to say `continue` before starting the next unit.
-16. When I say `continue`, resume from saved state instead of restarting from scratch.
-17. Move the source file to `./processed` only after all required units are successfully completed.
-18. If all units succeed, create `./output/CBLM_FULL.docx`.
 
-Quality rules:
-- Do not lower quality requirements to finish faster.
-- Do not use placeholder text.
-- Do not shorten Key Facts below the required minimum.
-- Do not batch-generate all unit payloads at once.
-- Draft the current unit from its own learning outcomes, topics, and subtopics.
-- Make each unit materially different from the others in explanation, examples, and workplace application.
-- Do not claim full success for the syllabus after completing only one unit.
-- Do not create local phrase-bank, variant-array, or slot-filling scripts to manufacture Key Facts prose.
-- If saving the payload requires a helper script because of shell length limits, use that script only to serialize content already authored in this run.
-- If you are about to rely on a programmatic prose generator to finish the unit, stop cleanly, save valid intermediate state, and wait for `continue` instead of forcing a low-quality draft.
-- If a similarity failure came from a synthetic generated draft, do not move the source file to `./failed`; keep it in `./inbox`, report the problem, and wait for `continue`.
-
-If you must pause, report:
-- what unit was completed
-- what files were written
-- what remains
-- whether it is safe to continue
-
+Read the syllabus from ./inbox.
+Map the syllabus exactly as:
+one syllabus learning outcome = one CBLM Unit of Competency
+one syllabus topic under that learning outcome = one CBLM Learning Outcome
+one syllabus subtopic under that topic = one CBLM content item
+Extract the qualification title, all syllabus learning outcomes, the topics under the current syllabus learning outcome, and the subtopics under those topics.
+Build one structured payload JSON for the current unit only, using the repo schema.
+In that structured payload:
+current_unit must represent one syllabus learning outcome
+current_unit.learning_outcomes[] must represent the topics under that syllabus learning outcome
+current_unit.learning_outcomes[].contents[] must represent the subtopics under each topic
+Save the draft payload JSON in ./state/payloads.
+Validate the payload completely before DOCX assembly.
+Ensure every Key Facts section meets the workspace requirements for length, structure, specificity, and distinctness.
+Run:
+.\.venv\Scripts\python.exe .\tools\check_keyfacts_similarity.py "<payload.json>"
+If redundancy is flagged, rewrite only the flagged Key Facts sections once, save the payload again, and rerun the checker.
+If the second similarity check still fails, stop and treat the current unit as failed according to the workspace rules.
+11a. Optional images (only if CBLM_GENERATE_IMAGES=1 in .env):
+Run: .\.venv\Scripts\python.exe .\tools\generate_keyfacts_images_openrouter.py "<payload.json>" --inplace
+If image generation fails, STOP and report the error; do not assemble the DOCX.
+If validation passes, generate the DOCX for the current unit with:
+.\.venv\Scripts\python.exe .\tools\assemble_cblm.py "<payload.json>" "<output.docx>"
+Save the generated DOCX in ./output.
+After one unit is successfully completed, pause and report status.
+Wait for me to say continue before starting the next unit.
+When I say continue, resume from saved state instead of restarting from scratch.
+Move the source file to ./processed only after all required units are successfully completed.
+If all units succeed, create ./output/CBLM_FULL.docx.
 Execute the first unit now.
+
+FOR CLINE:
+Read and follow these workspace instruction files before doing anything. If one is missing, continue with the files that exist:
+
+AGENTS.md
+BOOTSTRAP.md
+skills/cblm_generator/SKILL.md
+TOOLS.md
+USER.md
+SOUL.md
+HEARTBEAT.md
+IDENTITY.md
+
+Env setup (PowerShell):
+
+cd into the repo folder cblm-builder.
+Ensure .gitignore contains .env (create if missing). Never commit .env.
+If .env exists, load it into the current process env (do NOT echo secret values):
+if (!(Test-Path .gitignore)) { ".env" | Out-File -Encoding utf8 .gitignore }
+elseif (-not (Select-String -Quiet -Path .gitignore -Pattern '^\.env$')) { "`n.env" | Add-Content -Encoding utf8 .gitignore }
+
+if (Test-Path .env) {
+  Get-Content .env | ForEach-Object {
+    $l = $_.Trim()
+    if (-not $l -or $l.StartsWith('#') -or ($l -notmatch '=')) { return }
+    $k,$v = $l -split '=',2
+    $k = $k.Trim()
+    $v = $v.Trim().Trim('"')
+    Set-Item -Path ("Env:" + $k) -Value $v
+  }
+}
+Pre-check:
+
+If ./inbox is empty: exit immediately with no output.
+Process only ONE valid syllabus file per run.
+Now execute the repository workflow with these rules:
+
+General rules:
+
+Work on only that one syllabus file.
+Do not ask unnecessary questions.
+Prefer .\.venv\Scripts\python.exe for Python commands.
+Use up to 1200000 ms timeout for long-running steps.
+Use modular templates in ./templates.
+Use tools/assemble_cblm.py as the production assembler.
+Do not use the old monolithic template workflow.
+Follow workspace files as source of truth.
+Workflow (Unit-by-unit):
+
+Read the syllabus from ./inbox.
+Map exactly:
+syllabus LO → CBLM Unit of Competency
+syllabus Topic → CBLM Learning Outcome
+syllabus Subtopic → CBLM Content item
+Build ONE structured payload JSON for the CURRENT unit only.
+Save payload to ./state/payloads/.
+Validate payload completeness and requirements.
+Run similarity check:
+.\.venv\Scripts\python.exe .\tools\check_keyfacts_similarity.py "<payload.json>"
+If redundancy flagged: rewrite only flagged Key Facts once, save, rerun checker. If still flagged: fail unit per rules.
+Optional images (ONLY if CBLM_GENERATE_IMAGES=1):
+Run:
+.\.venv\Scripts\python.exe .\tools\generate_keyfacts_images_openrouter.py "<payload.json>" --inplace
+Then validate generated image files referenced by key_facts_image_path are PNG or JPG (by extension and basic file signature). If not valid, STOP and report (do not assemble).
+Assemble DOCX:
+.\.venv\Scripts\python.exe .\tools\assemble_cblm.py "<payload.json>" "<output.docx>"
+Save output in ./output.
+After one unit completes, PAUSE and report status; wait for me to say continue.
+Execute the first unit now.
+
+
 
 FOR CHATGPT:
 

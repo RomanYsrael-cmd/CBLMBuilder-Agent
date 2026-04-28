@@ -48,6 +48,17 @@ Interpret that payload as:
 - `current_unit.learning_outcomes[]` = the topics under that syllabus learning outcome
 - `current_unit.learning_outcomes[].contents[]` = the subtopics under each topic
 
+Counting rule (hard requirement):
+- Do not merge, drop, or cap topics/subtopics (e.g., “only 1 content”) unless the user explicitly requests it.
+- For the current unit:
+  - `len(current_unit.learning_outcomes)` MUST equal the number of Topics under the current syllabus learning outcome.
+  - For each LO created from a Topic, `len(lo.contents)` MUST equal the number of Subtopics listed under that Topic.
+- If any count does not match, STOP and report:
+  - the expected counts (from the syllabus)
+  - the actual counts in the payload
+  - which Topic/LO mismatched
+  - and do not assemble the DOCX.
+
 Do not build the old flat payload model with:
 - `LO_1`
 - `Contents_1_1`
@@ -114,6 +125,10 @@ Authoring rule:
 ## Generation Step
 
 1. Build one structured payload JSON for the current unit
+   - Before writing the payload, extract an explicit outline from the syllabus:
+     - list Topics under the current unit
+     - list every Subtopic under each Topic
+   - Use that outline as the source of truth for `learning_outcomes[]` and `contents[]`.
 2. Run:
    `.\.venv\Scripts\python.exe .\tools\check_keyfacts_similarity.py "<payload.json>"`
 3. If validation passes, run:
