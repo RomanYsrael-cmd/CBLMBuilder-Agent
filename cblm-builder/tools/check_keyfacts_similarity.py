@@ -25,17 +25,57 @@ def jaccard(left: set[str], right: set[str]) -> float:
     return len(left & right) / len(left | right)
 
 
+def extract_structured_sections(payload: dict) -> dict[str, str]:
+    sections: dict[str, str] = {}
+    current_unit = payload.get("current_unit")
+    if not isinstance(current_unit, dict):
+        return sections
+
+    learning_outcomes = current_unit.get("learning_outcomes")
+    if not isinstance(learning_outcomes, list):
+        return sections
+
+    unit_index = current_unit.get("index", "X")
+    for lo_position, lo in enumerate(learning_outcomes, start=1):
+        if not isinstance(lo, dict):
+            continue
+        lo_index = lo.get("index", lo_position)
+        contents = lo.get("contents")
+        if not isinstance(contents, list):
+            continue
+        for content_position, content in enumerate(contents, start=1):
+            if not isinstance(content, dict):
+                continue
+            content_index = content.get("index", content_position)
+            key_facts = content.get("key_facts")
+            if isinstance(key_facts, str) and key_facts.strip():
+                field_name = f"Contents_{unit_index}_{lo_index}_{content_index}_Key_Facts"
+                sections[field_name] = key_facts
+    return sections
+
+
+def extract_legacy_sections(payload: dict) -> dict[str, str]:
+    return {
+        key: value
+        for key, value in payload.items()
+        if key.endswith("_Key_Facts") and isinstance(value, str) and value.strip()
+    }
+
+
+def extract_sections(payload: dict) -> dict[str, str]:
+    sections = extract_structured_sections(payload)
+    if sections:
+        return sections
+    return extract_legacy_sections(payload)
+
+
 def main() -> int:
     if len(sys.argv) != 2:
         print("Usage: check_keyfacts_similarity.py <payload.json>")
         return 1
 
     payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-    sections = {
-        key: value
-        for key, value in payload.items()
-        if key.endswith("_Key_Facts") and isinstance(value, str) and value.strip()
-    }
+    sections = extract_sections(payload)
 
     if len(sections) < 2:
         print("OK: fewer than two Key Facts sections found.")

@@ -11,6 +11,7 @@ def merge_docs(files, output):
     composer = Composer(base_doc)
 
     for file in files[1:]:
+        composer.doc.add_page_break()
         doc = Document(file)
         composer.append(doc)
 
