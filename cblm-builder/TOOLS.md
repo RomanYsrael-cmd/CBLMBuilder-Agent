@@ -42,6 +42,30 @@ Do not prefer this for the new modular workflow.
 ### tools/docx_filler.py
 Lower-level helper code only.
 
+## Exam Generation
+
+### tools/exam_builder.py
+Build term exam DOCX files using `templates/EXAM TEMPLATE.docx` and MCQs sourced from unit payloads (`exercise_questions` per content item).
+
+If upstream question items include a hidden `level` field (`knowledge`, `comprehension`, `application`), `tools/exam_builder.py` can enforce the requested taxonomy mix before filling the template.
+
+Example (default terms MIDTERM,FINAL; 50 questions each):
+`.\.venv\Scripts\python.exe .\tools\exam_builder.py --course-code "IPE9" --course-title "Enterprise Systems" --payloads ".\state\payloads\IPE9_UC1.json" ".\state\payloads\IPE9_UC2.json" ".\state\payloads\IPE9_UC3.json" ".\state\payloads\IPE9_UC4.json"`
+
+Custom terms:
+`.\.venv\Scripts\python.exe .\tools\exam_builder.py --course-code "IPE9" --course-title "Enterprise Systems" --terms "PRELIMINARY,MIDTERM,PRE-FINAL,FINAL" --payloads <payloads...>`
+
+### tools/validate_exam_docx.py
+Validate a generated exam DOCX for:
+- bracketed provenance tags such as `[UC3-T2-S3-V3]`
+- `UC` / `Unit of Competency` mentions in question text
+- duplicate or near-duplicate questions
+- overused scaffold patterns
+- rough 10/10/30 knowledge/comprehension/application balance
+
+Example:
+`.\.venv\Scripts\python.exe .\tools\validate_exam_docx.py ".\output\exams\EXAM_IPC7_MIDTERM.docx"`
+
 ## Expected Flow
 
 1. Read one syllabus from `./inbox`

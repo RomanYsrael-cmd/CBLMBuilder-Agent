@@ -141,6 +141,35 @@ Authoring rule:
 - avoid duplicate work on already processed files
 - if paused mid-workflow, keep the syllabus in `./inbox` and keep draft payloads in `./state`
 
+## Exams (Optional, Post-Units)
+
+If `templates/EXAM TEMPLATE.docx` exists and the user requests exams, generate term exams after all unit DOCX files for the syllabus are completed (and before moving the syllabus to `./processed`).
+
+Interaction rule (required):
+- Always ask the user which terms to generate before producing exams.
+- Default terms if the user does not specify: `MIDTERM` and `FINAL`.
+- Confirm the unit-to-term scope mapping before running the generator:
+  - If UCs are divisible by the number of selected terms, split evenly in UC order.
+  - If not divisible, distribute remainder to earlier terms in order.
+
+Quality rule (required):
+- Do not generate “generic” questions from scratch.
+- Prefer sourcing exam items from existing `exercise_questions` already generated in unit payload JSONs for the in-scope UCs.
+- Enforce no duplicates / high-similarity questions within an exam; if validation fails, stop and report.
+- Exams must read like real classroom multiple-choice exams:
+  - never include internal provenance codes or tags such as `[UC3-T2-S3-V3]`
+  - never mention `UC`, `LO`, `Topic`, `Subtopic`, or `Unit of Competency` inside the question text
+  - avoid repeating the same stem pattern across many questions
+  - target a 50-item mix of 10 knowledge, 10 comprehension, and 30 application questions
+- Drafting rule for exams:
+  - build the exam first as structured question data before filling the DOCX
+  - each draft item must carry a hidden level label: `knowledge`, `comprehension`, or `application`
+  - validate the draft mix is exactly 10 knowledge, 10 comprehension, and 30 application before writing the final exam template
+  - the hidden labels must not appear in the final DOCX text
+- After generating each exam DOCX, run:
+  - `.\.venv\Scripts\python.exe .\tools\validate_exam_docx.py "<exam.docx>"`
+  - If validation fails, stop and revise the exam instead of treating it as complete.
+
 ## Failure Handling
 
 If extraction or generation fails:

@@ -135,6 +135,67 @@ Save output in ./output.,
 After one unit completes, PAUSE and report status; wait for me to say continue.
 Execute the first unit now.
 
+FOR CODEX (EXAM MIDTERM-FINALS):
+Read and follow these workspace instruction files before doing anything. If one is missing, continue with the files that exist:
+
+AGENTS.md
+BOOTSTRAP.md
+skills/cblm_generator/SKILL.md
+TOOLS.md
+USER.md
+SOUL.md
+HEARTBEAT.md
+IDENTITY.md
+
+Pre-check:
+
+If ./inbox is empty: EXIT immediately with no output.
+Process ONLY ONE syllabus file.
+Goal:
+
+Generate exams ONLY (no CBLM DOCX generation).
+Produce exactly 2 exams: MIDTERM and FINAL, using templates/EXAM TEMPLATE.docx.
+Rules:
+
+Extract the course title and course code from the syllabus file in ./inbox.
+Parse the syllabus structure:
+Learning Outcomes (LOs)
+Topics under each LO
+Subtopics under each Topic
+Build an “exam scope outline” in UC order:
+Treat each syllabus LO as one Unit of Competency (UC1..UCn) for ordering purposes.
+Divide scope evenly:
+MIDTERM covers the first half of UCs (in order).
+FINAL covers the second half of UCs (in order).
+If UC count is odd, MIDTERM gets the extra UC.
+Question sourcing (anti-generic rule):
+Do NOT write generic questions that could fit any syllabus.
+Every question must reference specific terms from the in-scope topics/subtopics.
+No repeated questions; no near-duplicate questions within the same exam.
+Format:
+50 multiple-choice questions per exam (A–D choices), suitable for the template.
+Questions must be distributed across the in-scope topics/subtopics (do not focus on just one topic).
+Validation before writing DOCX:
+50 questions exactly for each term.
+No duplicates (exact match after normalization).
+No high similarity pairs (shingled Jaccard ≥ 0.40 is considered too similar).
+Each question must include at least one keyword token drawn from the in-scope topic/subtopic titles (keyword overlap gate).
+Implementation steps:
+
+Identify the single syllabus file in ./inbox and read it.
+Extract COURSE_CODE and COURSE_TITLE.
+Build a structured in-memory outline of UCs → Topics → Subtopics.
+Split UCs into MIDTERM and FINAL scopes as described.
+Generate 50 MCQs for MIDTERM from its scope; validate per rules.
+Generate 50 MCQs for FINAL from its scope; validate per rules.
+Create two output files by filling templates/EXAM TEMPLATE.docx:
+output/exams/EXAM_<COURSE_CODE>_MIDTERM.docx
+output/exams/EXAM_<COURSE_CODE>_FINAL.docx
+Report:
+syllabus file processed
+UC split (which UCs went to MIDTERM vs FINAL)
+exam outputs written
+Execute now.
 
 
 FOR CHATGPT:
