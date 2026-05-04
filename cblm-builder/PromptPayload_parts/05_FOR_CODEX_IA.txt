@@ -1,0 +1,115 @@
+FOR CODEX (INSTITUTIONAL ASSESSMENT / IA):
+Read and follow these workspace instruction files before doing anything. If one is missing, continue with the files that exist:
+
+AGENTS.md
+BOOTSTRAP.md
+skills/cblm_generator/SKILL.md
+TOOLS.md
+USER.md
+SOUL.md
+HEARTBEAT.md
+IDENTITY.md
+
+Pre-check:
+
+If ./inbox is empty: EXIT immediately with no output.
+Process ONE COURSE-CODE GROUP per run (grouped by code in the filename).
+Only accept CBLM Unit files in DOCX format named like:
+  CBLM_Unit_<n>_<COURSE_CODE>_<Title>.docx
+Example:
+  CBLM_Unit_1_ICC_5_Information_Management.docx
+
+If the inbox contains multiple course codes:
+- deterministically pick ONE course-code group (sort by COURSE_CODE ascending, pick the first)
+- process ALL unit files for that course code (sorted by unit number ascending)
+
+Goal:
+
+Generate IA documents for ONE course-code group:
+- Create one IA payload JSON per unit
+- Assemble one IA DOCX per unit using the IA templates
+- Merge the group into one combined IA (IA_FULL.docx)
+- Do NOT generate CBLM DOCX files in this workflow
+- Stop after one course-code group is completed (wait for user continuation)
+
+General rules:
+
+Do not ask unnecessary questions.
+Prefer .\.venv\Scripts\python.exe for Python commands.
+Use up to 600000 ms timeout for long-running terminal commands.
+Follow the workspace files as the source of truth.
+Do not edit the IA DOCX templates unless explicitly requested.
+Enforce IA uniqueness guardrails:
+- IA project name and oral Q&A must be content-anchored (derived from the unit’s LO/content titles)
+- Avoid repeating the same oral questions across units in the same course-code group (the final generic “performance criteria” question may repeat)
+- If guardrails fail after retries, STOP with an error (do not move inputs)
+
+Input:
+
+One or more CBLM Unit DOCX files in ./inbox (potentially multiple course codes).
+
+Extraction rules (from the CBLM Unit DOCX):
+
+- qualification_title: extract from the CBLM front matter "Qualification Title" field (prefer table-based extraction). Do NOT use generic headers like "COMPETENCY-BASED LEARNING MATERIALS" as the qualification.
+- current_unit.unit_of_competency: extract from the "The unit of competency, “...”" sentence or the MODULE CONTENT section.
+- current_unit.module_title: extract from the module title line in front matter / MODULE CONTENT.
+- current_unit.next_unit_of_competency: extract from the "You need to complete this module before..." sentence.
+- current_unit.learning_outcomes[]:
+  - Each LO section title in the CBLM becomes one learning_outcomes item:
+    - index: 1..n (in order of appearance)
+    - title: LO title text (no rewriting)
+    - contents[]:
+      - Each content/topic under that LO becomes one content item:
+        - index: 1..m (in order)
+        - title: content title as written in CBLM (no rewriting)
+
+IA payload rules:
+
+Create a NEW payload JSON that is compatible with tools/assemble_ia.py:
+
+Top-level:
+- qualification_title (string)
+- current_unit (object)
+
+current_unit required fields:
+- unit_of_competency (string)
+- module_title (string)
+- next_unit_of_competency (string)
+- learning_outcomes (array)
+- ia (object) with these required fields:
+  - name_of_project (string)
+  - Specific_Instructions (string; detailed step-by-step procedure)
+  - instructions_for_demo (string)
+  - list_of_materials_and_equipment (string; newline-separated list is OK)
+  - oral_questions (array of exactly 5 objects: {question, acceptable_answer})
+  - interview_questions (array of exactly 5 strings)
+
+Important wording rule (for IA template {{Contents}} ONLY):
+
+When populating IA plan and rating sheet rows, the wording must fit:
+"The evidence must show that the trainee can {{Contents}}."
+
+Therefore, generate a derived "ability phrasing" for each content title when filling {{Contents}}:
+- If the content title starts with a verb (e.g., Apply/Identify/Explain/Develop/etc.), keep the phrase but lowercase the first letter (e.g., "Apply X" -> "apply X").
+- Otherwise use: "demonstrate competence in <content title>".
+
+DO NOT modify the IA template placeholder {{Contents_Z}} meaning:
+- {{Contents_Z}} remains the raw list of contents under the current LO (no wording adjustment).
+
+Implementation steps:
+
+Run the dedicated group processor script (it implements grouping + guardrails + merge):
+
+.\.venv\Scripts\python.exe .\tools\run_ia_group_from_inbox.py
+
+Then report:
+- COURSE_CODE group processed
+- unit files processed (count + names)
+- IA payload JSONs written (count)
+- IA unit DOCXs written (count)
+- IA_FULL.docx written (path)
+- inputs moved to processed path
+
+Stop after one COURSE_CODE group is completed and wait for user continuation.
+
+Execute now.
