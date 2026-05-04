@@ -13,22 +13,22 @@ IDENTITY.md
 Pre-check:
 
 If ./inbox is empty: EXIT immediately with no output.
-Process ONE COURSE-CODE GROUP per run (grouped by code in the filename).
 Only accept CBLM Unit files in DOCX format named like:
   CBLM_Unit_<n>_<COURSE_CODE>_<Title>.docx
 Example:
   CBLM_Unit_1_ICC_5_Information_Management.docx
 
-If the inbox contains multiple course codes:
-- deterministically pick ONE course-code group (sort by COURSE_CODE ascending, pick the first)
-- process ALL unit files for that course code (sorted by unit number ascending)
+Process ONE COURSE-CODE GROUP per run (grouped by code in the filename):
+- If the inbox contains multiple course codes, deterministically pick ONE course-code group (sort by COURSE_CODE ascending, pick the first)
+- For the chosen course code, process ALL unit files in ascending unit order
 
 Goal:
 
-Generate IA documents for ONE course-code group:
-- Create one IA payload JSON per unit
-- Assemble one IA DOCX per unit using the IA templates
-- Merge the group into one combined IA (IA_FULL.docx)
+Generate ONE IA for ONE course-code group (one syllabus/course):
+- Build one IA payload JSON for the full course that lists all contents across all unit CBLMs
+- Generate MIDTERM and FINALS exams (50 items each) and include them in the IA package
+- Assemble ONE IA DOCX (IA_FULL.docx) using the IA templates in this order:
+  00_FrontPage + 01_iaplan + 02_iaspesificinstruction + 03_midterm + 04_finals
 - Do NOT generate CBLM DOCX files in this workflow
 - Stop after one course-code group is completed (wait for user continuation)
 
@@ -39,6 +39,8 @@ Prefer .\.venv\Scripts\python.exe for Python commands.
 Use up to 600000 ms timeout for long-running terminal commands.
 Follow the workspace files as the source of truth.
 Do not edit the IA DOCX templates unless explicitly requested.
+Exam generation rule:
+- Generate MIDTERM and FINALS locally during IA processing (no external API calls; do not require OPENAI_API_KEY).
 Enforce IA uniqueness guardrails:
 - IA project name and oral Q&A must be content-anchored (derived from the unit’s LO/content titles)
 - Avoid repeating the same oral questions across units in the same course-code group (the final generic “performance criteria” question may repeat)
@@ -65,7 +67,7 @@ Extraction rules (from the CBLM Unit DOCX):
 
 IA payload rules:
 
-Create a NEW payload JSON that is compatible with tools/assemble_ia.py:
+Create a NEW payload JSON that is compatible with tools/assemble_ia.py and the updated IA templates:
 
 Top-level:
 - qualification_title (string)
@@ -98,15 +100,14 @@ DO NOT modify the IA template placeholder {{Contents_Z}} meaning:
 
 Implementation steps:
 
-Run the dedicated group processor script (it implements grouping + guardrails + merge):
+Run the dedicated course-level inbox processor:
 
-.\.venv\Scripts\python.exe .\tools\run_ia_group_from_inbox.py
+.\.venv\Scripts\python.exe .\tools\run_ia_course_from_inbox.py
 
 Then report:
 - COURSE_CODE group processed
 - unit files processed (count + names)
-- IA payload JSONs written (count)
-- IA unit DOCXs written (count)
+- IA payload JSON written (path)
 - IA_FULL.docx written (path)
 - inputs moved to processed path
 

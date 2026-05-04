@@ -1,0 +1,25 @@
+FOR CODEX (Generate per-UC ChatGPT authoring prompts)
+
+Pre-check:
+- If `./inbox` is empty: EXIT immediately with no output.
+- Process ONLY ONE syllabus file per run (deterministically pick the first valid `.txt`/`.md` in `./inbox`).
+
+Goal:
+Read the syllabus in `./inbox` and generate one ChatGPT prompt per Unit of Competency (UC), where:
+- Syllabus Learning Outcome (LO) -> UC
+- Therefore, if the syllabus has N learning outcomes, generate N ChatGPT prompts.
+
+Each generated ChatGPT prompt must instruct ChatGPT to output a complete `CODE_UCX_payload.json` that:
+- uses the topic-level payload model (one Key Facts / Let’s Exercise / Let’s Apply per Topic)
+- satisfies all validation constraints (e.g., Key Facts >= 1800 words per Topic, answer keys are exactly 10 lines, Module_Descriptor 80–120 words, etc.)
+
+Implementation:
+Run:
+`.\.venv\Scripts\python.exe .\tools\generate_chatgpt_unit_prompts.py`
+
+Outputs:
+- Writes prompts to `state/chatgpt_prompts/<COURSE_CODE>/`
+- Writes an index file `state/chatgpt_prompts/<COURSE_CODE>/PROMPTS_INDEX.json`
+
+Execute now.
+

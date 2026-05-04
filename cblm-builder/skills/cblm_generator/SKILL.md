@@ -68,10 +68,10 @@ unless explicitly required for legacy compatibility.
 
 ## Generation Requirements
 
-For each content item generate:
+For each Topic (Learning Outcome) generate:
 1. Key Facts
-   - Minimum 600 words
-   - Preferably 650-800 words
+   - One Key Facts per Topic, covering all subtopics under that Topic
+   - Minimum 1800 words
    - Paragraph-based, not bullet-only
    - Maintain an instructional TESDA-style tone
    - Include:
@@ -80,9 +80,9 @@ For each content item generate:
      3. real-world example
      4. industry/workplace application
      5. summary/reinforcement
-   - Keep each Key Facts section materially distinct from the others in the same unit
-   - Anchor each section to its exact content title and subtopics
-   - Avoid generic filler that could fit any content title
+   - Keep each Key Facts section materially distinct from the other Topics in the same unit
+   - Anchor each section to the Topic title and its subtopics (cover all subtopics)
+   - Avoid generic filler that could fit any Topic title
 2. Let's Exercise
    - exactly 10 multiple choice questions
    - answer key
@@ -94,6 +94,7 @@ For each content item generate:
    - Steps/Procedure
    - Assessment Method
    - exactly 5 performance criteria
+   - Base the activity on the syllabus "Activity" for that Topic (treat all activities as Let's Apply regardless of wording in the syllabus)
 
 ## Validation
 
@@ -102,7 +103,7 @@ Before assembly, verify:
 - `Module_Descriptor` is 80-120 words
 - `Laboratory` is not empty
 - `training_materials` is not empty
-- each Key Facts section has at least 600 words
+- each Topic Key Facts section has at least 1800 words
 - each answer key has 10 items
 - each Let's Apply block has 5 performance criteria
 - Key Facts sections in the same unit are not near-duplicates
@@ -134,6 +135,16 @@ Authoring rule:
 3. If validation passes, run:
    `.\.venv\Scripts\python.exe .\tools\assemble_cblm.py "<payload.json>" "<output.docx>"`
 
+## IA (Per-Unit, From Payload)
+
+After all unit payloads for the syllabus are completed, generate ONE IA for the syllabus/course that lists all contents across the generated CBLMs:
+
+`.\.venv\Scripts\python.exe .\tools\run_ia_course_from_state_payloads.py --course-code "<COURSE_CODE>"`
+
+This writes:
+- one IA payload JSON under `state/ia_payloads/<COURSE_CODE>/IA_FULL.json`
+- one IA DOCX under `output/ia/<COURSE_CODE>/IA_FULL.docx`
+
 ## Finalization
 
 - save outputs in `./output`
@@ -143,7 +154,7 @@ Authoring rule:
 
 ## Exams (Optional, Post-Units)
 
-If `templates/EXAM TEMPLATE.docx` exists and the user requests exams, generate term exams after all unit DOCX files for the syllabus are completed (and before moving the syllabus to `./processed`).
+If the user requests exams, generate MIDTERM and FINAL exams after all unit DOCX files for the syllabus are completed (and before moving the syllabus to `./processed`).
 
 Interaction rule (required):
 - Always ask the user which terms to generate before producing exams.
@@ -153,8 +164,8 @@ Interaction rule (required):
   - If not divisible, distribute remainder to earlier terms in order.
 
 Quality rule (required):
-- Do not generate “generic” questions from scratch.
-- Prefer sourcing exam items from existing `exercise_questions` already generated in unit payload JSONs for the in-scope UCs.
+- Generate a DIFFERENT set of questions from the unit Let’s Exercise items (do not copy/paraphrase them).
+- Base exam items on the unit payload outlines and Key Facts content.
 - Enforce no duplicates / high-similarity questions within an exam; if validation fails, stop and report.
 - Exams must read like real classroom multiple-choice exams:
   - never include internal provenance codes or tags such as `[UC3-T2-S3-V3]`
@@ -170,7 +181,25 @@ Quality rule (required):
   - `.\.venv\Scripts\python.exe .\tools\validate_exam_docx.py "<exam.docx>"`
   - If validation fails, stop and revise the exam instead of treating it as complete.
 
+Implementation (OpenAI, IA templates):
+- Uses `templates/IA TEMPLATES/03_midterm.docx` and `templates/IA TEMPLATES/04_finals.docx`
+- Generates and saves outputs to `output/ia/<COURSE_CODE>/03_midterm.docx` and `output/ia/<COURSE_CODE>/04_finals.docx`
+- Writes exam JSONs to `state/exams/<COURSE_CODE>/MIDTERM.json` and `state/exams/<COURSE_CODE>/FINAL.json`
+- Command:
+  `.\.venv\Scripts\python.exe .\tools\generate_course_exams_openai.py --course-code "<COURSE_CODE>" --payloads <payload1.json> <payload2.json> ... --append-to-ia-full`
+
+IA packaging rule:
+- During IA processing, always include: `00_FrontPage` + `01_iaplan` + `02_iaspesificinstruction` + `03_midterm` + `04_finals`.
+
 ## Failure Handling
+
+## Module Title Rule
+
+When drafting the unit payload, set `current_unit.module_title` to a gerund-style phrasing of `current_unit.unit_of_competency` (first word ends with `-ing` and still reads naturally).
+
+Example:
+- `unit_of_competency`: `Apply Quality Standards`
+- `module_title`: `Applying Quality Standards`
 
 If extraction or generation fails:
 - STOP immediately

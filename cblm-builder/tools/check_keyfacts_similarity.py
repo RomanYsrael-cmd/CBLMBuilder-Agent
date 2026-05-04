@@ -40,6 +40,15 @@ def extract_structured_sections(payload: dict) -> dict[str, str]:
         if not isinstance(lo, dict):
             continue
         lo_index = lo.get("index", lo_position)
+
+        # New schema: one Key Facts per Topic (LO).
+        key_facts = lo.get("key_facts")
+        if isinstance(key_facts, str) and key_facts.strip():
+            field_name = f"LO_{unit_index}_{lo_index}_Key_Facts"
+            sections[field_name] = key_facts
+            continue
+
+        # Legacy schema: Key Facts per content item.
         contents = lo.get("contents")
         if not isinstance(contents, list):
             continue

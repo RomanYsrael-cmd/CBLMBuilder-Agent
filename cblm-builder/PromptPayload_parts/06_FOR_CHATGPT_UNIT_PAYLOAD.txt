@@ -1,0 +1,104 @@
+FOR CHATGPT (UNIT PAYLOAD JSON AUTHORING â€” Topic-Level CBLM)
+
+Goal:
+Generate ONE complete structured unit payload JSON for a single Unit of Competency (UC) that will pass all repo constraints and can be assembled with:
+`.\.venv\Scripts\python.exe .\tools\assemble_cblm.py "<payload.json>" "<output.docx>"`
+
+Output rules (STRICT):
+- Output ONLY valid JSON (no markdown, no commentary, no code fences).
+- The JSON must be complete (all required fields present).
+- Write in formal TESDA instructional tone for long text fields.
+- Use the Topic-level schema:
+  - Syllabus Learning Outcome -> CBLM Unit of Competency (`current_unit`)
+  - Syllabus Topic under that LO -> CBLM Learning Outcome (`current_unit.learning_outcomes[]`)
+  - Syllabus Subtopic under that Topic -> CBLM Content item title ONLY (`learning_outcomes[].contents[]`)
+  - IMPORTANT: Key Facts / Letâ€™s Exercise / Letâ€™s Apply are authored ONCE per Topic (LO), not per Subtopic.
+
+Inputs:
+You will be given:
+1) The course/syllabus text (with all learning outcomes, topics, subtopics, and Activity per topic).
+2) The selected UC index X (which syllabus LO to build in this JSON).
+3) The full list of all syllabus learning outcomes (so you can populate qualification_units for the whole course).
+
+Schema (REQUIRED ROOT FIELDS):
+- sector (string)
+- qualification_title (string)
+- qualification_units (array; must include ALL UCs)
+- current_unit (object; for UC index X only)
+
+qualification_units rules:
+- Include all UCs in UC order.
+- Each item:
+  - index (int)
+  - unit_of_competency (string)  â€” from syllabus LO title
+  - module_title (string)         â€” gerund form of unit_of_competency (see rule below)
+  - unit_of_competency_code (string) â€” derive a stable code like "<COURSE_CODE>-UC<index>" if not provided
+
+Module title rule (HARD):
+- current_unit.module_title must be a gerund-style phrasing of current_unit.unit_of_competency.
+- It must start with an -ing verb form and still make sense.
+  Example: "Apply Quality Standards" -> "Applying Quality Standards"
+
+current_unit required fields:
+- index (int) â€” X
+- unit_of_competency (string)
+- module_title (string; gerund)
+- next_unit_of_competency (string; UC title of X+1, or empty string if none)
+- Module_Descriptor (string; 80â€“120 words)
+- Laboratory (string; not empty)
+- training_materials (string; not empty)
+- learning_outcomes (array; Topics under the selected syllabus LO)
+
+learning_outcomes rules (Topic-level authoring):
+For each Topic under the selected syllabus LO:
+- index (int; 1..n)
+- title (string; exact Topic title)
+- contents (array of subtopic titles only)
+  - each item: { index (int), title (string) }
+- key_facts (string) â€” ONE per Topic
+- exercise_questions (string) â€” ONE set per Topic
+- answer_key (string) â€” ONE key per Topic
+- apply_title (string) â€” derived from the syllabus Activity for that Topic (always treat as Letâ€™s Apply)
+- apply_objective (string)
+- apply_sup_mat (string)
+- apply_equipment_list (string)
+- apply_steps_list (string)
+- apply_assessmentmethod (string)
+- apply_pc1..apply_pc5 (strings; exactly 5 performance criteria)
+
+Key Facts rules (HARD):
+- ONE Key Facts per Topic (LO), covering ALL subtopics under that Topic.
+- Minimum 1800 words per Topic Key Facts.
+- Paragraph-based (not bullet-only).
+- TESDA instructional structure:
+  1) concept overview
+  2) detailed explanation
+  3) real-world example
+  4) industry/workplace application
+  5) summary/reinforcement
+- Each Topicâ€™s Key Facts must be materially distinct from other Topics in the same UC.
+
+Letâ€™s Exercise rules (HARD):
+- Exactly 10 multiple-choice questions per Topic.
+- Each question must have 4 choices labeled A, B, C, D, and an Answer line.
+- Provide a separate answer_key with exactly 10 non-empty lines (one per question), e.g.:
+  "1. A"
+  "2. C"
+  ...
+  "10. B"
+
+Letâ€™s Apply rules (HARD):
+- Base it on the syllabus Activity for that Topic (always interpret it as Letâ€™s Apply even if the syllabus says "Letâ€™s Exercise").
+- Must include steps/procedure and exactly 5 performance criteria (apply_pc1..apply_pc5).
+
+Validation targets (you must satisfy these):
+- Module_Descriptor is 80â€“120 words.
+- Laboratory is not empty.
+- training_materials is not empty.
+- Each Topic key_facts >= 1800 words.
+- Each Topic answer_key has exactly 10 non-empty lines.
+- Each Topic Letâ€™s Apply has 5 performance criteria.
+
+Finally:
+- Produce the JSON for the selected UC index X only (but include the full qualification_units list).
+- Output ONLY JSON file with filename: CODE_UCX.json

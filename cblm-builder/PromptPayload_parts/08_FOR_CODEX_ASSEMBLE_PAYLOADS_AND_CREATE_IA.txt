@@ -1,0 +1,32 @@
+FOR CODEX (Assemble CBLM from saved payloads + generate course-level IA)
+
+Pre-check:
+- If `./state/payloads` has no `.json` files: EXIT immediately with no output.
+- Do NOT touch files under `./processed` or `./failed`.
+
+Goal:
+Use the already-authored unit payload JSON files in `./state/payloads` to:
+1) Assemble unit CBLM DOCX files (one per UC payload).
+2) After all units are assembled, generate ONE course-level IA package (00+01+02+03+04) that lists all contents across all units and includes MIDTERM/FINAL exams.
+
+Selection rule:
+- If multiple course codes exist in `./state/payloads`, deterministically pick ONE course (sort by filename ascending, pick the first distinct course code prefix before the first `_`).
+- Process only that one course per run.
+
+Automatic execution rule:
+- Do NOT prompt the user to say `continue`.
+- Process ALL payloads for the chosen course in UC order in a single run.
+
+Implementation:
+Run the fully automatic assembler:
+
+`.\.venv\Scripts\python.exe .\tools\run_course_from_state_payloads_auto.py`
+
+This will:
+- Validate similarity per payload
+- Apply image rules via `CBLM_GENERATE_IMAGES` (0/1)
+- Assemble all unit DOCXs
+- Merge into `output/CBLM_FULL.docx`
+- Generate the full course IA package via `tools/run_ia_course_from_state_payloads.py`
+
+Execute now.

@@ -99,15 +99,34 @@ def build_prompt(*, lo_title: str, content_title: str, key_facts: str) -> str:
     )
 
 
-def iter_contents(payload: dict):
+def iter_targets(payload: dict):
+    """
+    Yields tuples of:
+      (unit_index, lo_index, lo_title, target_dict, item_index, item_title, key_facts_text)
+
+    Supports both schemas:
+    - New: key_facts stored at LO level (one per topic)
+    - Legacy: key_facts stored at content level (one per subtopic)
+    """
     unit = payload.get("current_unit") or {}
     unit_index = unit.get("index")
     learning_outcomes = unit.get("learning_outcomes") or []
     for lo in learning_outcomes:
         lo_index = lo.get("index")
         lo_title = lo.get("title", "")
+
+        lo_key_facts = str(lo.get("key_facts") or "").strip()
+        if lo_key_facts:
+            yield unit_index, lo_index, lo_title, lo, 1, str(lo_title or f"LO_{lo_index}"), lo_key_facts
+            continue
+
         for content in lo.get("contents") or []:
-            yield unit_index, lo_index, lo_title, content
+            content_index = content.get("index", "Z")
+            content_title = str(content.get("title") or f"Content_{content_index}")
+            key_facts = str(content.get("key_facts") or "").strip()
+            if not key_facts:
+                continue
+            yield unit_index, lo_index, lo_title, content, content_index, content_title, key_facts
 
 
 def main() -> int:
@@ -142,20 +161,16 @@ def main() -> int:
     generated = 0
     skipped = 0
 
-    for unit_idx, lo_idx, lo_title, content in iter_contents(payload):
-        if not isinstance(content, dict):
+    for unit_idx, lo_idx, lo_title, target, item_index, item_title, key_facts in iter_targets(payload):
+        if not isinstance(target, dict):
             continue
 
-        existing = content.get("key_facts_image_path")
+        existing = target.get("key_facts_image_path")
         if existing and not args.force:
             skipped += 1
             continue
 
-        content_index = content.get("index", "Z")
-        content_title = str(content.get("title") or f"Content_{content_index}")
-        key_facts = str(content.get("key_facts") or "")
-
-        prompt = build_prompt(lo_title=str(lo_title or ""), content_title=content_title, key_facts=key_facts)
+        prompt = build_prompt(lo_title=str(lo_title or ""), content_title=str(item_title or ""), key_facts=key_facts)
         b64 = openai_generate_image_b64(
             api_key=api_key,
             prompt=prompt,
@@ -166,13 +181,13 @@ def main() -> int:
         )
 
         image_bytes = base64.b64decode(b64)
-        filename = f"UC{unit_idx}_LO{lo_idx}_C{content_index}_{slugify(content_title)}.png"
+        filename = f"UC{unit_idx}_LO{lo_idx}_C{item_index}_{slugify(item_title)}.png"
         image_path = outdir / filename
         image_path.write_bytes(image_bytes)
 
-        content["key_facts_image_path"] = os.path.relpath(image_path, start=payload_path.parent)
-        content["key_facts_image_caption"] = f"Figure {unit_idx}.{lo_idx}-{content_index} — {content_title}"
-        content["key_facts_image_prompt"] = prompt
+        target["key_facts_image_path"] = os.path.relpath(image_path, start=payload_path.parent)
+        target["key_facts_image_caption"] = f"Figure {unit_idx}.{lo_idx}-{item_index} — {item_title}"
+        target["key_facts_image_prompt"] = prompt
 
         generated += 1
         if args.sleep_s > 0:
@@ -191,4 +206,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

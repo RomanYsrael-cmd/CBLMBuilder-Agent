@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from docx import Document
+from docxcompose.composer import Composer
 
 
 INBOX_DIR = Path("inbox")
@@ -550,6 +551,9 @@ def main(argv: list[str]) -> int:
         except Exception:
             pass
 
+    # If course-level exams exist (generated after all UCs), append them to IA_FULL.
+    _maybe_append_course_exams(chosen_course, out_dir=out_dir)
+
     processed_inputs: list[Path] = []
     for input_path in to_move_inputs:
         dest = processed_dir / input_path.name
@@ -567,6 +571,35 @@ def main(argv: list[str]) -> int:
     }
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     return 0
+
+
+def _maybe_append_course_exams(course_code: str, *, out_dir: Path) -> None:
+    """
+    If course-level exams exist (generated after all UCs), append them to IA_FULL.docx.
+    """
+    ia_full = out_dir / "IA_FULL.docx"
+    if not ia_full.exists():
+        return
+
+    mid = out_dir / "03_midterm.docx"
+    fin = out_dir / "04_finals.docx"
+    if not mid.exists() or not fin.exists():
+        return
+
+    tmp = out_dir / "IA_FULL__with_exams__tmp.docx"
+    base_doc = Document(str(ia_full))
+    composer = Composer(base_doc)
+    for p in [mid, fin]:
+        composer.doc.add_page_break()
+        composer.append(Document(str(p)))
+    try:
+        if tmp.exists():
+            tmp.unlink()
+        composer.save(str(tmp))
+        ia_full.unlink()
+        tmp.rename(ia_full)
+    except PermissionError as e:
+        raise RuntimeError(f"Cannot overwrite {ia_full} (file may be open). Close it and rerun. Details: {e}")
 
 
 if __name__ == "__main__":

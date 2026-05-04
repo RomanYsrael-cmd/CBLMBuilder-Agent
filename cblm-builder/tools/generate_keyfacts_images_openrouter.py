@@ -204,15 +204,34 @@ def openrouter_chat_generate_image_data_url_with_retries(
     raise RuntimeError(f"OpenRouter failed after {attempts} attempts") from last_exc
 
 
-def iter_contents(payload: dict):
+def iter_targets(payload: dict):
+    """
+    Yields tuples of:
+      (unit_index, lo_index, lo_title, target_dict, item_index, item_title, key_facts_text)
+
+    Supports both schemas:
+    - New: key_facts stored at LO level (one per topic)
+    - Legacy: key_facts stored at content level (one per subtopic)
+    """
     unit = payload.get("current_unit") or {}
     unit_index = unit.get("index")
     learning_outcomes = unit.get("learning_outcomes") or []
     for lo in learning_outcomes:
         lo_index = lo.get("index")
         lo_title = lo.get("title", "")
+
+        lo_key_facts = str(lo.get("key_facts") or "").strip()
+        if lo_key_facts:
+            yield unit_index, lo_index, lo_title, lo, 1, str(lo_title or f"LO_{lo_index}"), lo_key_facts
+            continue
+
         for content in lo.get("contents") or []:
-            yield unit_index, lo_index, lo_title, content
+            content_index = content.get("index", "Z")
+            content_title = str(content.get("title") or f"Content_{content_index}")
+            key_facts = str(content.get("key_facts") or "").strip()
+            if not key_facts:
+                continue
+            yield unit_index, lo_index, lo_title, content, content_index, content_title, key_facts
 
 
 def main() -> int:
@@ -291,11 +310,11 @@ def main() -> int:
     skipped = 0
 
     try:
-        for unit_idx, lo_idx, lo_title, content in iter_contents(payload):
-            if not isinstance(content, dict):
+        for unit_idx, lo_idx, lo_title, target, item_index, item_title, key_facts in iter_targets(payload):
+            if not isinstance(target, dict):
                 continue
 
-            existing = content.get("key_facts_image_path")
+            existing = target.get("key_facts_image_path")
             if existing and not args.force:
                 skipped += 1
                 continue
@@ -303,11 +322,7 @@ def main() -> int:
             if args.max_images and generated >= args.max_images:
                 break
 
-            content_index = content.get("index", "Z")
-            content_title = str(content.get("title") or f"Content_{content_index}")
-            key_facts = str(content.get("key_facts") or "")
-
-            prompt = build_prompt(lo_title=str(lo_title or ""), content_title=content_title, key_facts=key_facts)
+            prompt = build_prompt(lo_title=str(lo_title or ""), content_title=str(item_title or ""), key_facts=key_facts)
             data_url = openrouter_chat_generate_image_data_url_with_retries(
                 retries=args.retries,
                 retry_sleep_s=args.retry_sleep_s,
@@ -328,14 +343,14 @@ def main() -> int:
                 # If Pillow can't decode the bytes, fall back to raw bytes and extension from the data URL.
                 pass
 
-            filename = f"UC{unit_idx}_LO{lo_idx}_C{content_index}_{slugify(content_title)}.{ext}"
+            filename = f"UC{unit_idx}_LO{lo_idx}_C{item_index}_{slugify(item_title)}.{ext}"
             image_path = outdir / filename
             image_path.write_bytes(image_bytes)
 
-            content["key_facts_image_path"] = os.path.relpath(image_path, start=payload_path.parent)
-            content["key_facts_image_caption"] = f"Figure {unit_idx}.{lo_idx}-{content_index} - {content_title}"
-            content["key_facts_image_prompt"] = prompt
-            content["key_facts_image_model"] = args.model
+            target["key_facts_image_path"] = os.path.relpath(image_path, start=payload_path.parent)
+            target["key_facts_image_caption"] = f"Figure {unit_idx}.{lo_idx}-{item_index} - {item_title}"
+            target["key_facts_image_prompt"] = prompt
+            target["key_facts_image_model"] = args.model
 
             generated += 1
             save_payload(out_payload_path, payload)

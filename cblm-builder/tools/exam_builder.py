@@ -155,6 +155,16 @@ def extract_mcqs_from_payload(payload: dict, source: str) -> list[MCQ]:
     unit = payload.get("current_unit") or {}
     out: list[MCQ] = []
     for lo in unit.get("learning_outcomes") or []:
+        # New schema: one exercise_questions block per LO (Topic).
+        if safe_text(lo.get("key_facts")).strip():
+            value = lo.get("exercise_questions")
+            mcqs = parse_exercise_questions(value)
+            for m in mcqs:
+                m.source = source
+            out.extend(mcqs)
+            continue
+
+        # Legacy schema: per content item.
         for content in lo.get("contents") or []:
             value = content.get("exercise_questions")
             mcqs = parse_exercise_questions(value)

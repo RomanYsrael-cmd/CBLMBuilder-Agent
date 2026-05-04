@@ -10,6 +10,8 @@ When a syllabus file is available in `./inbox`:
 - extract all learning outcomes, topics, and subtopics needed for the current unit
 - generate one CBLM document per unit of competency
 - save and validate one structured unit payload before DOCX assembly
+- generate one Key Facts / Let’s Exercise / Let’s Apply per Topic (CBLM Learning Outcome), covering all subtopics under that Topic
+- after generating all unit CBLMs for a syllabus, generate ONE IA for the syllabus that lists all contents across the generated CBLMs
 - if Key Facts redundancy is detected, regenerate the flagged Key Facts sections once before continuing
 - work on one unit at a time instead of generating all unit payloads in one batch
 - after finishing one unit, pause for user continuation unless fully automatic continuation was explicitly requested

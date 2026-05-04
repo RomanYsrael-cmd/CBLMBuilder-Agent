@@ -1,4 +1,5 @@
 import json
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -241,7 +242,107 @@ def replace_keyfacts_with_inline_image(doc_part, placeholder, key_facts_text, im
 
 def load_payload(path):
     with Path(path).open("r", encoding="utf-8") as handle:
-        return json.load(handle)
+        payload = json.load(handle)
+
+    # Normalize module title to match UC phrasing (gerund form) for the current workflow.
+    # This is applied in-memory for assembly; it does not overwrite the payload file.
+    try:
+        unit = payload.get("current_unit") if isinstance(payload, dict) else None
+        if isinstance(unit, dict):
+            uc = safe_text(unit.get("unit_of_competency", "")).strip()
+            module_title = safe_text(unit.get("module_title", "")).strip()
+            if uc:
+                expected = gerund_module_title_from_uc(uc)
+                if expected and _norm_simple(module_title) != _norm_simple(expected):
+                    unit["module_title"] = expected
+                    print(f"Note: normalized module_title to '{expected}' (from UC '{uc}').", file=sys.stderr)
+    except Exception:
+        pass
+
+    return payload
+
+
+def _norm_simple(text: str) -> str:
+    return " ".join(safe_text(text).strip().lower().split())
+
+
+_GERUND_IRREGULARS = {
+    "be": "being",
+    "begin": "beginning",
+    "lie": "lying",
+    "tie": "tying",
+    "die": "dying",
+}
+
+
+def _to_gerund(verb: str) -> str:
+    v = safe_text(verb).strip()
+    if not v:
+        return ""
+    lower = v.lower()
+    if lower in _GERUND_IRREGULARS:
+        g = _GERUND_IRREGULARS[lower]
+        return g[:1].upper() + g[1:] if v[:1].isupper() else g
+
+    # Basic English gerund rules:
+    # - make -> making (drop trailing e)
+    # - study -> studying (y stays, because not preceded by a vowel rule isn't needed here)
+    # - run -> running (double final consonant in some CVC cases) — we keep it simple for common cases
+    base = v
+    if re.search(r"[A-Za-z]e$", base) and not re.search(r"(ee|oe|ye)$", base, re.IGNORECASE):
+        base = base[:-1]
+    elif re.search(r"ie$", base, re.IGNORECASE):
+        base = base[:-2] + ("y" if base[-2:].islower() else "Y")
+
+    # Very small consonant-doubling heuristic: CVC ending, single syllable-ish (short word).
+    # Examples: run -> running, plan -> planning, stop -> stopping.
+    if re.search(r"^[A-Za-z]{3,5}$", base) and re.search(r"[^aeiou][aeiou][^aeiou]$", base, re.IGNORECASE):
+        last = base[-1]
+        if last.lower() not in {"w", "x", "y"}:
+            base = base + last
+
+    return base + ("ing" if base[-1].islower() else "ing")
+
+
+def gerund_module_title_from_uc(unit_of_competency: str) -> str:
+    """
+    Convert UC title to a module title that is almost the same meaning but starts with a gerund verb.
+
+    Example:
+      "Apply Quality Standards" -> "Applying Quality Standards"
+    """
+    uc = safe_text(unit_of_competency).strip()
+    if not uc:
+        return ""
+
+    words = uc.split()
+    if not words:
+        return ""
+
+    first = words[0]
+
+    # Handle common "Verb and verb ..." phrasing by converting both verbs:
+    #   "Implement and manipulate ..." -> "Implementing and manipulating ..."
+    if len(words) >= 3 and words[1].lower() == "and":
+        second_verb = words[2]
+        if not first.lower().endswith("ing") and not second_verb.lower().endswith("ing"):
+            gerund_first = _to_gerund(first)
+            gerund_second = _to_gerund(second_verb)
+            tail = " ".join(words[3:]).strip()
+            if tail:
+                return f"{gerund_first} and {gerund_second} {tail}"
+            return f"{gerund_first} and {gerund_second}"
+
+    rest = " ".join(words[1:]).strip()
+
+    # If UC already starts with a gerund (e.g., "Applying"), keep it.
+    if first.lower().endswith("ing"):
+        return uc
+
+    gerund = _to_gerund(first)
+    if not rest:
+        return gerund
+    return f"{gerund} {rest}"
 
 
 def validate_payload(payload):
@@ -274,41 +375,92 @@ def validate_payload(payload):
     if not unit["learning_outcomes"]:
         raise ValueError("current_unit.learning_outcomes must not be empty")
 
+    def _is_topic_level(lo: dict) -> bool:
+        # New schema: one Key Facts / Exercise / Apply per Topic (LO).
+        # Feature flag: presence of lo.key_facts.
+        return isinstance(lo, dict) and bool(safe_text(lo.get("key_facts", "")).strip())
+
+    def _validate_apply_block(obj: dict, *, context: str) -> None:
+        for field in [
+            "apply_title",
+            "apply_objective",
+            "apply_sup_mat",
+            "apply_equipment_list",
+            "apply_steps_list",
+            "apply_assessmentmethod",
+            "apply_pc1",
+            "apply_pc2",
+            "apply_pc3",
+            "apply_pc4",
+            "apply_pc5",
+        ]:
+            if not safe_text(obj.get(field, "")).strip():
+                raise ValueError(f"Missing field '{field}' in {context}")
+
     for lo in unit["learning_outcomes"]:
         if "title" not in lo or "contents" not in lo:
             raise ValueError("Each learning outcome needs title and contents")
         if not lo["contents"]:
             raise ValueError(f"Learning outcome '{lo.get('title', '')}' has no contents")
-        for content in lo["contents"]:
-            for field in [
-                "title",
-                "key_facts",
-                "exercise_questions",
-                "answer_key",
-                "apply_title",
-                "apply_objective",
-                "apply_sup_mat",
-                "apply_equipment_list",
-                "apply_steps_list",
-                "apply_assessmentmethod",
-                "apply_pc1",
-                "apply_pc2",
-                "apply_pc3",
-                "apply_pc4",
-                "apply_pc5",
-            ]:
-                if not safe_text(content.get(field, "")).strip():
-                    raise ValueError(f"Missing content field '{field}' in LO '{lo['title']}'")
-            if len(safe_text(content["key_facts"]).split()) < 600:
-                raise ValueError(f"Key Facts too short for content '{content['title']}'")
-            answer_lines = [line for line in safe_text(content["answer_key"]).splitlines() if line.strip()]
+
+        if _is_topic_level(lo):
+            for field in ["key_facts", "exercise_questions", "answer_key"]:
+                if not safe_text(lo.get(field, "")).strip():
+                    raise ValueError(f"Missing LO field '{field}' in LO '{lo['title']}'")
+
+            if len(safe_text(lo["key_facts"]).split()) < 1800:
+                raise ValueError(f"Key Facts too short for LO '{lo['title']}' (min 1800 words)")
+
+            answer_lines = [line for line in safe_text(lo["answer_key"]).splitlines() if line.strip()]
             if len(answer_lines) != 10:
-                raise ValueError(f"Expected 10 answer key lines for content '{content['title']}'")
+                raise ValueError(f"Expected 10 answer key lines for LO '{lo['title']}'")
+
+            _validate_apply_block(lo, context=f"LO '{lo['title']}'")
+
+            # Contents remain for listing subtopics only; they must have titles.
+            for content in lo["contents"]:
+                if not safe_text(content.get("title", "")).strip():
+                    raise ValueError(f"Missing content title in LO '{lo['title']}'")
+        else:
+            # Legacy per-subtopic content items (kept for backward compatibility)
+            for content in lo["contents"]:
+                for field in [
+                    "title",
+                    "key_facts",
+                    "exercise_questions",
+                    "answer_key",
+                    "apply_title",
+                    "apply_objective",
+                    "apply_sup_mat",
+                    "apply_equipment_list",
+                    "apply_steps_list",
+                    "apply_assessmentmethod",
+                    "apply_pc1",
+                    "apply_pc2",
+                    "apply_pc3",
+                    "apply_pc4",
+                    "apply_pc5",
+                ]:
+                    if not safe_text(content.get(field, "")).strip():
+                        raise ValueError(f"Missing content field '{field}' in LO '{lo['title']}'")
+                if len(safe_text(content["key_facts"]).split()) < 600:
+                    raise ValueError(f"Key Facts too short for content '{content['title']}'")
+                answer_lines = [line for line in safe_text(content["answer_key"]).splitlines() if line.strip()]
+                if len(answer_lines) != 10:
+                    raise ValueError(f"Expected 10 answer key lines for content '{content['title']}'")
 
 
 def get_front_matter_learning_outcome_items(unit):
     items = []
     for lo in unit["learning_outcomes"]:
+        # New schema: LO = Topic, so list LO titles in front matter.
+        if safe_text(lo.get("key_facts", "")).strip():
+            title = safe_text(lo.get("title", "")).strip()
+            if title:
+                items.append(title)
+            continue
+
+        # Legacy schema: keep previous behavior (list content titles).
         contents = lo.get("contents") or []
         if contents:
             items.extend(safe_text(content.get("title", "")).strip() for content in contents if safe_text(content.get("title", "")).strip())
@@ -395,28 +547,54 @@ def render_learning_experience(template_path, unit_index, lo):
     apply_scalar_map(doc, {"X": unit_index, "Y": lo["index"], "LO": lo["title"]})
 
     table = doc.tables[0]
-    contents = lo["contents"]
-    needed_rows = 1 + (len(contents) * 3)
 
-    row_index = 1
-    for content in contents:
-        replacements = [
-            ("Reading Key Facts {{X}}.{{Y}}-{{Z}}. {{Contents_Z}}", f"Reading Key Facts {unit_index}.{lo['index']}-{content['index']}. {content['title']}"),
+    def _is_topic_level(item: dict) -> bool:
+        return isinstance(item, dict) and bool(safe_text(item.get("key_facts", "")).strip())
+
+    if _is_topic_level(lo):
+        # New schema: one Key Facts / Exercise / Apply per Topic (LO)
+        z = 1
+        needed_rows = 1 + 3
+        rows = [
+            f"Reading Key Facts {unit_index}.{lo['index']}-{z}. {lo['title']}",
             (
-                "Answering Let’s Exercise {{X}}.{{Y}}-{{Z}}. {{Contents_Z}}\nCompare answers to Answer Key {{X}}.{{Y}}-{{Z}} {{Contents_Z}}",
-                f"Answering Let’s Exercise {unit_index}.{lo['index']}-{content['index']}. {content['title']}\nCompare answers to Answer Key {unit_index}.{lo['index']}-{content['index']} {content['title']}",
+                f"Answering Let’s Exercise {unit_index}.{lo['index']}-{z}. {lo['title']}\n"
+                f"Compare answers to Answer Key {unit_index}.{lo['index']}-{z} {lo['title']}"
             ),
-            (
-                "Performing Let’s Apply {{X}}.{{Y}}-{{Z}}.  {{la_title_z}}",
-                f"Performing Let’s Apply {unit_index}.{lo['index']}-{content['index']}.  {content['apply_title']}",
-            ),
+            f"Performing Let’s Apply {unit_index}.{lo['index']}-{z}.  {safe_text(lo.get('apply_title', '')).strip()}",
         ]
-        for replacement in replacements:
-            set_cell_text(table.rows[row_index].cells[0], replacement[1])
+        row_index = 1
+        for value in rows:
+            if row_index < len(table.rows):
+                set_cell_text(table.rows[row_index].cells[0], value)
             row_index += 1
 
-    while len(table.rows) > needed_rows:
-        delete_row(table, len(table.rows) - 1)
+        while len(table.rows) > needed_rows:
+            delete_row(table, len(table.rows) - 1)
+    else:
+        # Legacy schema: per content
+        contents = lo["contents"]
+        needed_rows = 1 + (len(contents) * 3)
+
+        row_index = 1
+        for content in contents:
+            replacements = [
+                ("Reading Key Facts {{X}}.{{Y}}-{{Z}}. {{Contents_Z}}", f"Reading Key Facts {unit_index}.{lo['index']}-{content['index']}. {content['title']}"),
+                (
+                    "Answering Let’s Exercise {{X}}.{{Y}}-{{Z}}. {{Contents_Z}}\nCompare answers to Answer Key {{X}}.{{Y}}-{{Z}} {{Contents_Z}}",
+                    f"Answering Let’s Exercise {unit_index}.{lo['index']}-{content['index']}. {content['title']}\nCompare answers to Answer Key {unit_index}.{lo['index']}-{content['index']} {content['title']}",
+                ),
+                (
+                    "Performing Let’s Apply {{X}}.{{Y}}-{{Z}}.  {{la_title_z}}",
+                    f"Performing Let’s Apply {unit_index}.{lo['index']}-{content['index']}.  {content['apply_title']}",
+                ),
+            ]
+            for replacement in replacements:
+                set_cell_text(table.rows[row_index].cells[0], replacement[1])
+                row_index += 1
+
+        while len(table.rows) > needed_rows:
+            delete_row(table, len(table.rows) - 1)
 
     normalize_all_runs_font(doc)
     return doc
@@ -531,6 +709,9 @@ def assemble_cblm(payload, templates_dir, output_path, payload_base_dir=None):
     payload_base_dir = Path(payload_base_dir or ".")
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
+    def _is_topic_level(lo: dict) -> bool:
+        return isinstance(lo, dict) and bool(safe_text(lo.get("key_facts", "")).strip())
+
     with tempfile.TemporaryDirectory() as temp_dir:
         front_doc = render_front_matter(templates_dir / TEMPLATE_FILES["front_matter"], payload)
         front_path = save_temp_doc(front_doc, temp_dir, "00_front.docx")
@@ -548,27 +729,74 @@ def assemble_cblm(payload, templates_dir, output_path, payload_base_dir=None):
             append_with_page_break(composer, experience_path)
             part_index += 1
 
-            for content in lo["contents"]:
+            if _is_topic_level(lo):
+                # New: one Key Facts / Exercise / Apply per Topic (LO)
+                pseudo_content = {
+                    "index": 1,
+                    "title": lo["title"],
+                    "key_facts": lo.get("key_facts", ""),
+                    "exercise_questions": lo.get("exercise_questions", ""),
+                    "answer_key": lo.get("answer_key", ""),
+                    "apply_title": lo.get("apply_title", ""),
+                    "apply_objective": lo.get("apply_objective", ""),
+                    "apply_sup_mat": lo.get("apply_sup_mat", ""),
+                    "apply_equipment_list": lo.get("apply_equipment_list", ""),
+                    "apply_steps_list": lo.get("apply_steps_list", ""),
+                    "apply_assessmentmethod": lo.get("apply_assessmentmethod", ""),
+                    "apply_pc1": lo.get("apply_pc1", ""),
+                    "apply_pc2": lo.get("apply_pc2", ""),
+                    "apply_pc3": lo.get("apply_pc3", ""),
+                    "apply_pc4": lo.get("apply_pc4", ""),
+                    "apply_pc5": lo.get("apply_pc5", ""),
+                    # optional image fields supported by render_key_facts
+                    "key_facts_image_path": lo.get("key_facts_image_path") or lo.get("image_path"),
+                    "key_facts_image_caption": lo.get("key_facts_image_caption") or lo.get("image_caption"),
+                    "key_facts_image_width_in": lo.get("key_facts_image_width_in") or lo.get("image_width_in"),
+                }
+
                 key_doc = render_key_facts(
                     templates_dir / TEMPLATE_FILES["key_facts"],
                     unit["index"],
                     lo["index"],
-                    content,
+                    pseudo_content,
                     payload_base_dir=payload_base_dir,
                 )
                 key_path = save_temp_doc(key_doc, temp_dir, f"{part_index:03d}_key_facts.docx")
                 append_with_page_break(composer, key_path)
                 part_index += 1
 
-                exercise_doc = render_lets_exercise(templates_dir / TEMPLATE_FILES["lets_exercise"], unit["index"], lo["index"], content)
+                exercise_doc = render_lets_exercise(templates_dir / TEMPLATE_FILES["lets_exercise"], unit["index"], lo["index"], pseudo_content)
                 exercise_path = save_temp_doc(exercise_doc, temp_dir, f"{part_index:03d}_exercise.docx")
                 append_with_page_break(composer, exercise_path)
                 part_index += 1
 
-                apply_doc = render_lets_apply(templates_dir / TEMPLATE_FILES["lets_apply"], unit["index"], lo["index"], content)
+                apply_doc = render_lets_apply(templates_dir / TEMPLATE_FILES["lets_apply"], unit["index"], lo["index"], pseudo_content)
                 apply_path = save_temp_doc(apply_doc, temp_dir, f"{part_index:03d}_apply.docx")
                 append_with_page_break(composer, apply_path)
                 part_index += 1
+            else:
+                # Legacy: per subtopic content item
+                for content in lo["contents"]:
+                    key_doc = render_key_facts(
+                        templates_dir / TEMPLATE_FILES["key_facts"],
+                        unit["index"],
+                        lo["index"],
+                        content,
+                        payload_base_dir=payload_base_dir,
+                    )
+                    key_path = save_temp_doc(key_doc, temp_dir, f"{part_index:03d}_key_facts.docx")
+                    append_with_page_break(composer, key_path)
+                    part_index += 1
+
+                    exercise_doc = render_lets_exercise(templates_dir / TEMPLATE_FILES["lets_exercise"], unit["index"], lo["index"], content)
+                    exercise_path = save_temp_doc(exercise_doc, temp_dir, f"{part_index:03d}_exercise.docx")
+                    append_with_page_break(composer, exercise_path)
+                    part_index += 1
+
+                    apply_doc = render_lets_apply(templates_dir / TEMPLATE_FILES["lets_apply"], unit["index"], lo["index"], content)
+                    apply_path = save_temp_doc(apply_doc, temp_dir, f"{part_index:03d}_apply.docx")
+                    append_with_page_break(composer, apply_path)
+                    part_index += 1
 
         composer.save(output_path)
 

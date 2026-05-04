@@ -11,16 +11,15 @@ from docx.shared import Pt
 from docxcompose.composer import Composer
 
 
-FONT_NAME = "Bookman Old Style"
+FONT_NAME = "Arial Narrow"
 FONT_SIZE = 12
 
 IA_TEMPLATE_FILES = {
     "front_page": "00_FrontPage.docx",
     "ia_plan": "01_iaplan.docx",
     "specific_instructions": "02_iaspesificinstruction.docx",
-    "rating_sheet": "03_ratingsheet.docx",
-    "questions_with_answers": "04_iaquestionwithanswer.docx",
-    "recording_sheet": "05_iarecordingsheet.docx",
+    "midterm": "03_midterm.docx",
+    "finals": "04_finals.docx",
 }
 
 
@@ -171,13 +170,11 @@ def _get_unit(payload):
 def render_front_page(template_path, payload):
     doc = Document(template_path)
     enforce_document_font(doc)
-    unit = _get_unit(payload)
     apply_scalar_map(
         doc,
         {
-            "unit_of_competency": unit.get("unit_of_competency", ""),
-            # allow either spelling if present
-            "unit_of_competency_x": unit.get("unit_of_competency", ""),
+            "qualification": payload.get("qualification_title", ""),
+            "qualification_title": payload.get("qualification_title", ""),
         },
     )
     normalize_all_runs_font(doc)
@@ -187,15 +184,11 @@ def render_front_page(template_path, payload):
 def render_specific_instructions(template_path, payload):
     doc = Document(template_path)
     enforce_document_font(doc)
-    unit = _get_unit(payload)
-    ia = unit.get("ia", {}) or {}
     apply_scalar_map(
         doc,
         {
-            "unit_of_competency": unit.get("unit_of_competency", ""),
-            "module_title": unit.get("module_title", ""),
-            "name_of_project": ia.get("name_of_project", ""),
-            "Specific_Instructions": ia.get("Specific_Instructions", ia.get("specific_instructions", "")),
+            "qualification": payload.get("qualification_title", ""),
+            "qualification_title": payload.get("qualification_title", ""),
         },
     )
     normalize_all_runs_font(doc)
@@ -287,8 +280,8 @@ def render_ia_plan(template_path, payload):
     apply_scalar_map(
         doc,
         {
-            "unit_of_competency": unit.get("unit_of_competency", ""),
-            "module_title": unit.get("module_title", ""),
+            "qualification": payload.get("qualification_title", ""),
+            "qualification_title": payload.get("qualification_title", ""),
         },
     )
 
@@ -306,69 +299,43 @@ def render_ia_plan(template_path, payload):
     return doc
 
 
-def render_rating_sheet(template_path, payload):
+def render_exam(template_path, *, course_code: str, course_title: str, mcqs: list[dict]) -> Document:
+    """
+    Fill the MIDTERM/FINALS templates (50 questions).
+    Expected placeholders: {{COURSE_CODE}}, {{COURSE_TITLE}}, {{Q_NUM}}, {{QUESTION}}, {{Q_CHOICE1..4}}.
+    """
     doc = Document(template_path)
     enforce_document_font(doc)
-    unit = _get_unit(payload)
-    ia = unit.get("ia", {}) or {}
-    apply_scalar_map(
-        doc,
-        {
-            "qualification_title": payload.get("qualification_title", ""),
-            "qualification": payload.get("qualification_title", ""),
-            "module_title": unit.get("module_title", ""),
-            "instructions_for_demo": ia.get("instructions_for_demo", ""),
-            "list_of_materials_and_equipment": ia.get("list_of_materials_and_equipment", ""),
-        },
-    )
+    apply_scalar_map(doc, {"COURSE_CODE": course_code, "COURSE_TITLE": course_title, "TERM": ""})
 
-    if doc.tables:
-        table = doc.tables[0]
-        _fill_plan_or_rating_table(
-            table,
-            unit,
-            adjust_contents=True,  # keep consistent: content phrasing for {{Contents}}
-            include_contents_list_col=False,
-        )
+    # Locate question table (expected 25 rows x 2 columns; total 50 cells).
+    question_table = None
+    for table in doc.tables:
+        if len(table.rows) == 25 and len(table.columns) == 2:
+            question_table = table
+            break
+    if question_table is None:
+        raise ValueError("Could not locate question table (expected 25x2).")
 
-    normalize_all_runs_font(doc)
-    return doc
+    cells = []
+    for row in question_table.rows:
+        cells.append(row.cells[0])
+        cells.append(row.cells[1])
 
+    if len(mcqs) != 50:
+        raise ValueError(f"Expected exactly 50 MCQs, got {len(mcqs)}")
 
-def render_questions_with_answers(template_path, payload):
-    doc = Document(template_path)
-    enforce_document_font(doc)
-    unit = _get_unit(payload)
-    ia = unit.get("ia", {}) or {}
-    oral = ia.get("oral_questions", []) or []
+    for idx, item in enumerate(mcqs, start=1):
+        mapping = {
+            "Q_NUM": str(idx),
+            "QUESTION": safe_text(item.get("question", "")).strip(),
+            "Q_CHOICE1": safe_text(item.get("a", "")).strip(),
+            "Q_CHOICE2": safe_text(item.get("b", "")).strip(),
+            "Q_CHOICE3": safe_text(item.get("c", "")).strip(),
+            "Q_CHOICE4": safe_text(item.get("d", "")).strip(),
+        }
+        apply_scalar_map(cells[idx - 1], mapping)
 
-    values = {}
-    for i in range(1, 6):
-        q = oral[i - 1] if i - 1 < len(oral) else {}
-        values[f"oral_question_{i}"] = q.get("question", "")
-        values[f"oral_question_{i}_acceptable_answer"] = q.get("acceptable_answer", q.get("answer", ""))
-
-    apply_scalar_map(doc, values)
-    normalize_all_runs_font(doc)
-    return doc
-
-
-def render_recording_sheet(template_path, payload):
-    doc = Document(template_path)
-    enforce_document_font(doc)
-    unit = _get_unit(payload)
-    ia = unit.get("ia", {}) or {}
-    interview = ia.get("interview_questions", []) or []
-
-    values = {
-        "module_title": unit.get("module_title", ""),
-        "qualification": payload.get("qualification_title", ""),
-        "qualification_title": payload.get("qualification_title", ""),
-    }
-    for i in range(1, 6):
-        values[f"interview_question_{i}"] = interview[i - 1] if i - 1 < len(interview) else ""
-
-    apply_scalar_map(doc, values)
     normalize_all_runs_font(doc)
     return doc
 
@@ -387,9 +354,37 @@ def assemble_ia(payload_path, output_path, templates_dir="templates/IA TEMPLATES
         parts.append(render_front_page(templates_dir / IA_TEMPLATE_FILES["front_page"], payload))
         parts.append(render_ia_plan(templates_dir / IA_TEMPLATE_FILES["ia_plan"], payload))
         parts.append(render_specific_instructions(templates_dir / IA_TEMPLATE_FILES["specific_instructions"], payload))
-        parts.append(render_rating_sheet(templates_dir / IA_TEMPLATE_FILES["rating_sheet"], payload))
-        parts.append(render_questions_with_answers(templates_dir / IA_TEMPLATE_FILES["questions_with_answers"], payload))
-        parts.append(render_recording_sheet(templates_dir / IA_TEMPLATE_FILES["recording_sheet"], payload))
+
+        # Exams are required for the IA package: always append MIDTERM and FINALS.
+        exams = payload.get("exams") or {}
+        if not isinstance(exams, dict):
+            raise ValueError("IA payload missing required field: exams")
+
+        course_code = safe_text(exams.get("course_code", "")).strip()
+        course_title = safe_text(exams.get("course_title", "")).strip() or safe_text(payload.get("qualification_title", "")).strip()
+        midterm_mcqs = exams.get("midterm_mcqs")
+        finals_mcqs = exams.get("finals_mcqs")
+        if not course_code:
+            raise ValueError("IA payload exams.course_code must not be empty")
+        if not isinstance(midterm_mcqs, list) or not isinstance(finals_mcqs, list):
+            raise ValueError("IA payload exams.midterm_mcqs and exams.finals_mcqs must be present (50 MCQs each)")
+
+        parts.append(
+            render_exam(
+                templates_dir / IA_TEMPLATE_FILES["midterm"],
+                course_code=course_code,
+                course_title=course_title,
+                mcqs=midterm_mcqs,
+            )
+        )
+        parts.append(
+            render_exam(
+                templates_dir / IA_TEMPLATE_FILES["finals"],
+                course_code=course_code,
+                course_title=course_title,
+                mcqs=finals_mcqs,
+            )
+        )
 
         base_path = temp_dir / "000_ia_base.docx"
         parts[0].save(base_path)

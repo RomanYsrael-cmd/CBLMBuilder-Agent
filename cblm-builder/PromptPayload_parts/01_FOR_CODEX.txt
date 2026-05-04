@@ -47,22 +47,37 @@ current_unit must represent one syllabus learning outcome
 current_unit.learning_outcomes[] must represent the topics under that syllabus learning outcome
 current_unit.learning_outcomes[].contents[] must represent the subtopics under each topic
 Save the draft payload JSON in ./state/payloads.
+Module title rule:
+- Set `current_unit.module_title` to a gerund-style phrasing of `current_unit.unit_of_competency` (first word ends with `-ing` and still reads naturally).
+  Example: "Apply Quality Standards" -> "Applying Quality Standards"
 Validate the payload completely before DOCX assembly.
 Ensure every Key Facts section meets the workspace requirements for length, structure, specificity, and distinctness.
 Run:
 .\.venv\Scripts\python.exe .\tools\check_keyfacts_similarity.py "<payload.json>"
 If redundancy is flagged, rewrite only the flagged Key Facts sections once, save the payload again, and rerun the checker.
 If the second similarity check still fails, stop and treat the current unit as failed according to the workspace rules.
-11a. Optional images (only if CBLM_GENERATE_IMAGES=1 in .env):
-Run: .\.venv\Scripts\python.exe .\tools\generate_keyfacts_images_openrouter.py "<payload.json>" --inplace
-If image generation fails, STOP and report the error; do not assemble the DOCX.
+11a. Optional images:
+- If `CBLM_GENERATE_IMAGES=0` (or unset): do NOT generate images.
+- If `CBLM_GENERATE_IMAGES=1`: generate Key Facts images and write paths back into the payload JSON:
+  Run: .\.venv\Scripts\python.exe .\tools\generate_keyfacts_images_openrouter.py "<payload.json>" --inplace
+  If image generation fails, STOP and report the error; do not assemble the DOCX.
 If validation passes, generate the DOCX for the current unit with:
 .\.venv\Scripts\python.exe .\tools\assemble_cblm.py "<payload.json>" "<output.docx>"
 Save the generated DOCX in ./output.
-After one unit is successfully completed, pause and report status.
-Wait for me to say continue before starting the next unit.
-When I say continue, resume from saved state instead of restarting from scratch.
-Move the source file to ./processed only after all required units are successfully completed.
-If all units succeed, create ./output/CBLM_FULL.docx.
-Execute the first unit now.
+CBLM content rule update:
+- Generate ONE Key Facts / Let’s Exercise / Let’s Apply per Topic (CBLM Learning Outcome), covering all subtopics under that Topic.
+- Use the Topic title as the Key Facts title context.
+Unit progression + pause rule:
+- Generate exactly ONE UC CBLM per run (the next unfinished UC for the syllabus).
+- After ONE UC is successfully completed (payload validated + DOCX assembled), PAUSE and report status.
+- Wait for me to say `continue` before starting the next UC.
+- When I say `continue`, resume from saved state instead of restarting from scratch.
+
+After all UCs for the syllabus are completed:
+1) Create `./output/CBLM_FULL.docx` (merged in UC order).
+2) Generate ONE IA for the full syllabus (lists all contents across all generated units) from the saved unit payloads in `state/payloads`:
+   .\.venv\Scripts\python.exe .\tools\run_ia_course_from_state_payloads.py --course-code "<COURSE_CODE>"
+3) Move the source syllabus file to `./processed` only after the full IA is completed (and any requested exams, if applicable).
+
+Execute the first UC now.
 

@@ -71,12 +71,10 @@ Map them as:
 - if fewer than 3 subtopics exist, create a reasonable academically aligned content title based on the topic
 
 KEY FACTS RULE:
-For every Contents_X_Y field, generate:
-- Contents_X_Y_Key_Facts
+For every Topic (LO) generate ONE Key Facts block that covers all subtopics under that Topic.
 
 Requirements:
-- minimum 600 words
-- preferably 650-800 words
+- minimum 1800 words
 - paragraph-based, not bullet-only
 - instructional TESDA-style tone
 - include:
@@ -85,8 +83,8 @@ Requirements:
   3. real-world example
   4. industry/workplace application
   5. summary/reinforcement
-- each Key Facts section must be materially different from the others in the same payload
-- anchor each section to its exact content title and subtopics, not just the parent topic
+- each Topic Key Facts section must be materially different from the others in the same payload
+- anchor each section to its Topic title and all subtopics under that Topic
 - vary the opening, workplace example, explanatory angle, and reinforcement paragraph across sections
 - do not reuse the same sentence pattern with only a few term substitutions
 - avoid generic filler that could fit any content title
