@@ -1,0 +1,179 @@
+FOR CODEX (SYLLABUS -> IA + TOS-ALIGNED EXAMS, NO CBLM DOCX):
+Read and follow these workspace instruction files before doing anything. If one is missing, continue with the files that exist:
+
+AGENTS.md
+BOOTSTRAP.md
+skills/cblm_generator/SKILL.md
+TOOLS.md
+USER.md
+SOUL.md
+HEARTBEAT.md
+IDENTITY.md
+
+Env setup (PowerShell):
+
+If .env exists at repo root, load it into the current process environment (do NOT echo values):
+For each non-empty, non-comment line containing =:
+split on the first = into key and value
+trim whitespace
+strip surrounding quotes from value if present
+set Env:key = value
+Ensure .gitignore includes .env (create it if missing). Never commit .env.
+
+Pre-check:
+
+If ./inbox is empty: EXIT immediately with no output.
+Process ONLY ONE valid syllabus file per run.
+Supported syllabus inputs:
+- .txt
+- .md
+- .docx
+
+Goal:
+
+Starting from ONE syllabus file in ./inbox:
+1. Extract the course structure directly from the syllabus.
+2. Build the course-level IA package without generating any CBLM DOCX files.
+3. Generate syllabus-derived MIDTERM and FINALS TOS workbooks plus matching 50-item exam DOCX files using the patched TOS/exam workflow.
+4. Move the syllabus to ./processed only after all requested outputs are completed successfully.
+
+Required deliverable rule:
+
+Treat one successful run as exactly 3 output packages:
+- Package 1: the IA package
+- Package 2: the MIDTERM TOS package
+- Package 3: the FINALS TOS package
+
+The run is not complete unless all 3 packages exist.
+
+General rules:
+
+Work on only that one syllabus file.
+Do not ask unnecessary questions.
+Prefer .\.venv\Scripts\python.exe for Python commands.
+Use up to 600000 ms timeout for long-running terminal commands.
+Follow the workspace files as the source of truth.
+Do NOT generate CBLM DOCX files in this workflow.
+Do NOT claim that this workflow assembled `CBLM_FULL.docx`.
+Use the raw syllabus as the source of truth for both IA structure and TOS-aligned exams.
+Do not manually rewrite the TOS workbook XML outside the dedicated tool path; use `tools/build_tos_and_exam_from_syllabus.py` as the only TOS workbook writer.
+
+Syllabus mapping rule:
+
+- one syllabus learning outcome = one Unit of Competency for ordering/scope
+- one syllabus topic under that learning outcome = one Learning Outcome for IA/TOS organization
+- one syllabus subtopic under that topic = one content item
+
+Extraction requirements:
+
+Read the syllabus from ./inbox.
+Extract:
+- course title
+- course code
+- all syllabus learning outcomes
+- the topics under each learning outcome
+- the subtopics under each topic
+
+Direct IA rule:
+
+Because this workflow skips CBLM generation, build the IA package directly from the syllabus-derived structure.
+
+Create a NEW IA payload JSON that is compatible with tools/assemble_ia.py and the updated IA templates.
+
+The IA payload must:
+- list all contents across the syllabus/course
+- preserve topic/content order
+- use content-anchored IA wording
+- generate the IA package in the template order:
+  00_FrontPage + 01_iaplan + 02_iaspesificinstruction + 03_midterm + 04_finals
+
+Important wording rule (for IA template {{Contents}} ONLY):
+
+When populating IA plan and rating sheet rows, the wording must fit:
+"The evidence must show that the trainee can {{Contents}}."
+
+Therefore, generate a derived "ability phrasing" for each content title when filling {{Contents}}:
+- If the content title starts with a verb, keep the phrase but lowercase the first letter.
+- Otherwise use: "demonstrate competence in <content title>".
+
+DO NOT modify the IA template placeholder {{Contents_Z}} meaning:
+- {{Contents_Z}} remains the raw list of contents under the current LO.
+
+IA generation rule:
+
+- Build one course-level IA payload JSON directly from the syllabus structure.
+- Save it under `state/ia_payloads/<COURSE_CODE>/IA_FULL.json`.
+- Assemble `output/ia/<COURSE_CODE>/IA_FULL.docx` using `tools/assemble_ia.py`.
+- Do not require CBLM unit DOCX files as inputs for this workflow.
+
+TOS-aligned exam rule:
+
+After the IA payload structure is ready, run the dedicated syllabus-to-TOS/exam workflow:
+
+.\.venv\Scripts\python.exe .\tools\build_tos_and_exam_from_syllabus.py
+
+This workflow must:
+- identify all syllabus Topics
+- resolve which Topics belong to MIDTERM and FINALS
+- read week counts when present and map them to `No. of Days Taught`
+- use those week counts as the basis for TOS topic weighting
+- allocate `No. of Items` per Topic proportionally
+- force each term total to exactly 50:
+  - if the total is greater than 50, subtract 1 from one or more Topics until the total is 50
+  - if the total is less than 50, add 1 to one or more Topics until the total is 50
+- create one exam objective per Topic with 10-20 words
+- fill the term-specific TOS templates:
+  - `templates/TOS_TEMPLATE_MIDTERMS.xlsx`
+  - `templates/TOS_TEMPLATE_FINALS.xlsx`
+  and populate their placeholders for:
+  - topic
+  - objective
+  - number_of_days
+  - k_array
+  - c_array
+  - a_array
+- generate matching 1-50 MIDTERM and FINALS multiple-choice exam DOCX files from the TOS allocation
+
+TOS numbering rule:
+
+- MIDTERM:
+  - `K + C = 30%`
+  - `A = 70%`
+- FINALS:
+  - `K + C = 20%`
+  - `A = 80%`
+
+The question numbering arrays written into the TOS must match the generated exam items exactly.
+
+Outputs required:
+
+- Package 1: IA package
+  - `state/ia_payloads/<COURSE_CODE>/IA_FULL.json`
+  - `output/ia/<COURSE_CODE>/IA_FULL.docx`
+- Package 2: MIDTERM TOS package
+  - `output/tos/TOS_<COURSE_CODE>_MIDTERM.xlsx`
+  - `output/exams/EXAM_<COURSE_CODE>_MIDTERM.docx`
+  - `state/tos/<COURSE_CODE>/MIDTERM.json`
+- Package 3: FINALS TOS package
+  - `output/tos/TOS_<COURSE_CODE>_FINALS.xlsx`
+  - `output/exams/EXAM_<COURSE_CODE>_FINALS.docx`
+  - `state/tos/<COURSE_CODE>/FINALS.json`
+
+Finalization:
+
+Move the source syllabus file to ./processed only after:
+- the IA is completed
+- the TOS workbooks are completed
+- the matching exams are completed
+
+Then report:
+- syllabus file processed
+- course code and title
+- the 3 output packages written
+- IA payload path
+- IA output path
+- MIDTERM TOS/exam paths
+- FINALS TOS/exam paths
+- syllabus moved to processed
+
+Execute now.

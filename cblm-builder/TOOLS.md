@@ -44,6 +44,35 @@ Lower-level helper code only.
 
 ## Exam Generation
 
+### tools/build_tos_and_exam_from_syllabus.py
+Build two TOS workbooks (`MIDTERM`, `FINALS`) from a syllabus and generate matching 50-item exam DOCX files.
+
+Behavior:
+- reads the first `.txt`, `.md`, or `.docx` syllabus in `./inbox` by default
+- identifies topics and subtopics from the syllabus structure
+- resolves topics to `MIDTERM` or `FINALS` using explicit term labels when present; otherwise falls back to the repo’s UC-order split
+- reads week labels when present and maps the resulting week count into `No. of Days Taught`
+- allocates `No. of Items` proportionally, then adjusts counts so each term totals exactly `50`
+- fills `{{topic}}`, `{{objectives}}`, `{{number_of_days}}`, `{{k_array}}`, `{{c_array}}`, and `{{a_array}}` in:
+  - `templates/TOS_TEMPLATE_MIDTERMS.xlsx`
+  - `templates/TOS_TEMPLATE_FINALS.xlsx`
+- generates a matching exam DOCX whose item numbering follows the TOS arrays exactly
+
+Term ratios:
+- `MIDTERM`: `K + C = 30%`, `A = 70%`
+- `FINALS`: `K + C = 20%`, `A = 80%`
+
+Outputs:
+- `output/tos/TOS_<COURSE_CODE>_MIDTERM.xlsx`
+- `output/tos/TOS_<COURSE_CODE>_FINALS.xlsx`
+- `output/exams/EXAM_<COURSE_CODE>_MIDTERM.docx`
+- `output/exams/EXAM_<COURSE_CODE>_FINALS.docx`
+- `state/tos/<COURSE_CODE>/MIDTERM.json`
+- `state/tos/<COURSE_CODE>/FINALS.json`
+
+Example:
+`.\.venv\Scripts\python.exe .\tools\build_tos_and_exam_from_syllabus.py`
+
 ### tools/exam_builder.py
 Build term exam DOCX files using `templates/EXAM TEMPLATE.docx` and MCQs sourced from unit payloads (`exercise_questions` per content item).
 

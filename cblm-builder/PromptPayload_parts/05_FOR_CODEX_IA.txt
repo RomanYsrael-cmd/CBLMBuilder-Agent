@@ -39,8 +39,16 @@ Prefer .\.venv\Scripts\python.exe for Python commands.
 Use up to 600000 ms timeout for long-running terminal commands.
 Follow the workspace files as the source of truth.
 Do not edit the IA DOCX templates unless explicitly requested.
+Important scope rule:
+- This IA workflow starts from CBLM Unit DOCX inputs, not from the raw syllabus.
+- Therefore it can assemble the IA package and course-level exams, but it cannot produce syllabus-derived TOS workbooks by itself.
+- If the user specifically requires TOS-aligned exams driven by syllabus Topics, weeks, and `k/c/a` numbering, use the dedicated syllabus workflow separately:
+  .\.venv\Scripts\python.exe .\tools\build_tos_and_exam_from_syllabus.py
+  Do not claim that `run_ia_course_from_inbox.py` filled `templates/TOS_TEMPLATE_MIDTERMS.xlsx` or `templates/TOS_TEMPLATE_FINALS.xlsx`.
 Exam generation rule:
 - Generate MIDTERM and FINALS locally during IA processing (no external API calls; do not require OPENAI_API_KEY).
+- These IA exams are course-level packaged exams.
+- If syllabus-derived TOS outputs already exist, report them, but do not overwrite them unless explicitly instructed.
 Enforce IA uniqueness guardrails:
 - IA project name and oral Q&A must be content-anchored (derived from the unit’s LO/content titles)
 - Avoid repeating the same oral questions across units in the same course-code group (the final generic “performance criteria” question may repeat)
