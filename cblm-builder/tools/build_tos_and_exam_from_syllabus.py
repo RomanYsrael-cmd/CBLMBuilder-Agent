@@ -1,4 +1,5 @@
 import argparse
+import copy
 import json
 import random
 import re
@@ -234,6 +235,59 @@ def infer_subtopics_from_title(topic_title: str) -> list[str]:
     return [title] if title else []
 
 
+def is_noise_subtopic(text: str) -> bool:
+    lower = normalize_spaces(text).lower()
+    if not lower:
+        return True
+    noise_values = {
+        "interactive",
+        "discussion",
+        "interactive discussion",
+        "self",
+        "self-",
+        "directed",
+        "self directed",
+        "self-directed",
+        "blended",
+        "e-books",
+        "writing",
+        "materials",
+        "writing materials",
+        "module",
+        "internet",
+        "connections",
+        "internet connections",
+        "let's apply",
+        "lets apply",
+        "let's exercise",
+        "lets exercise",
+        "read and",
+        "understand key topics and",
+        "learning points",
+    }
+    return lower in noise_values
+
+
+def clean_subtopic_phrase(text: str) -> str:
+    cleaned = normalize_spaces(text)
+    cleaned = re.sub(r"^\d+\.\s*", "", cleaned)
+    return cleaned
+
+
+def concise_focus_text(text: str, *, max_words: int = 12) -> str:
+    cleaned = clean_subtopic_phrase(text)
+    for delimiter in [":", ";", " - ", " — ", ","]:
+        if delimiter in cleaned:
+            candidate = cleaned.split(delimiter, 1)[0].strip()
+            if candidate:
+                cleaned = candidate
+                break
+    words = cleaned.split()
+    if len(words) > max_words:
+        cleaned = " ".join(words[:max_words]).strip()
+    return cleaned.rstrip(".,;:-")
+
+
 def parse_table_style_topics(
     lines: list[str],
     *,
@@ -257,6 +311,8 @@ def parse_table_style_topics(
         if not line:
             return False
         if lower in topic_header_stoppers:
+            return False
+        if lower in {"a. orientation", "orientation"}:
             return False
         if lower.startswith(("lo", "co", "sdg", "week", "let", "read key facts", "answer let", "activity ")):
             return False
@@ -422,6 +478,8 @@ def parse_syllabus(text: str) -> Syllabus:
             return False
         if lower.startswith("course ") or lower.startswith("general ") or lower.startswith("program "):
             return False
+        if lower in {"a. orientation", "orientation"}:
+            return False
         if lower.startswith("co") or lower.startswith("lo") or lower.startswith("sdg"):
             return False
         if parse_term_label(norm) or is_session_header(norm):
@@ -570,11 +628,12 @@ def parse_syllabus(text: str) -> Syllabus:
                     continue
                 if clean_bullet(nxt) != nxt:
                     cleaned = clean_bullet(nxt)
-                    if cleaned:
+                    if cleaned and not is_noise_subtopic(cleaned):
                         subtopics.append(cleaned)
                     j += 1
                     continue
-                subtopics.append(nxt)
+                if not is_noise_subtopic(nxt):
+                    subtopics.append(nxt)
                 j += 1
                 continue
 
@@ -621,8 +680,13 @@ def parse_syllabus(text: str) -> Syllabus:
                 continue
         merged_topics.append(topic)
     topics = merged_topics
-    if not topics:
-        topics = parse_table_style_topics(lines, topic_header_stoppers=topic_header_stoppers, topic_body_markers=topic_body_markers)
+    table_topics = parse_table_style_topics(lines, topic_header_stoppers=topic_header_stoppers, topic_body_markers=topic_body_markers)
+    if table_topics and (
+        not topics
+        or len(table_topics) > len(topics)
+        or len({t.uc_index for t in table_topics}) > len({t.uc_index for t in topics})
+    ):
+        topics = table_topics
     if not topics:
         raise ValueError("No topics were parsed from the syllabus.")
     return Syllabus(course_title=course_title, course_code=course_code, topics=topics, raw_text=text)
@@ -650,21 +714,69 @@ def ensure_term_assignments(syllabus: Syllabus) -> dict[str, list[TopicSpec]]:
     return terms
 
 
-def build_objective(topic_title: str, subtopics: list[str]) -> str:
-    focus = subtopics[0] if subtopics else topic_title
-    candidate = (
-        f"Demonstrate accurate understanding and practical application of {topic_title} concepts "
-        f"using {focus} in workplace situations."
-    )
-    words = candidate.split()
-    if len(words) > 20:
-        candidate = f"Demonstrate accurate understanding and application of {topic_title} concepts in workplace situations."
-    words = candidate.split()
+def pick_objective_verb(topic_title: str) -> str:
+    lower = normalize_spaces(topic_title).lower()
+    keyword_map = [
+        ("introduction", "Explain"),
+        ("fundamentals", "Explain"),
+        ("principles", "Explain"),
+        ("basics", "Explain"),
+        ("architecture", "Describe"),
+        ("framework", "Describe"),
+        ("planning", "Plan"),
+        ("plan", "Plan"),
+        ("design", "Design"),
+        ("model", "Model"),
+        ("analysis", "Analyze"),
+        ("analytics", "Analyze"),
+        ("evaluation", "Evaluate"),
+        ("testing", "Test"),
+        ("troubleshooting", "Troubleshoot"),
+        ("repair", "Troubleshoot"),
+        ("configuration", "Configure"),
+        ("setup", "Configure"),
+        ("deployment", "Deploy"),
+        ("implementation", "Implement"),
+        ("integration", "Integrate"),
+        ("security", "Apply"),
+        ("governance", "Apply"),
+        ("management", "Manage"),
+        ("service", "Manage"),
+        ("documentation", "Document"),
+        ("reporting", "Present"),
+        ("presentation", "Present"),
+    ]
+    for keyword, verb in keyword_map:
+        if keyword in lower:
+            return verb
+    return "Apply"
+
+
+def normalize_objective_length(text: str) -> str:
+    words = normalize_spaces(text).split()
+    fillers = ["effectively", "in", "practical", "workplace", "tasks"]
+    fill_index = 0
     while len(words) < 10:
-        words.append("effectively")
+        words.append(fillers[fill_index % len(fillers)])
+        fill_index += 1
     if len(words) > 20:
         words = words[:20]
     return " ".join(words)
+
+
+def build_objective(topic_title: str, subtopics: list[str]) -> str:
+    title = normalize_spaces(topic_title)
+    clean_subtopics = [clean_subtopic_phrase(s) for s in subtopics if clean_subtopic_phrase(s)]
+    verb = pick_objective_verb(title)
+
+    if len(clean_subtopics) >= 2:
+        candidate = f"{verb} {title} through {clean_subtopics[0]} and {clean_subtopics[1]} in practical information systems work"
+    elif len(clean_subtopics) == 1:
+        candidate = f"{verb} {title} through {clean_subtopics[0]} in practical information systems work"
+    else:
+        candidate = f"{verb} {title} in practical information systems work using course-relevant methods"
+
+    return normalize_objective_length(candidate)
 
 
 def compute_item_counts(days: list[int], total_items: int, rng: random.Random) -> list[int]:
@@ -706,10 +818,6 @@ def build_term_plans(syllabus: Syllabus, seed: int) -> dict[str, list[TermTopicP
     term_plans: dict[str, list[TermTopicPlan]] = {}
     for offset, term_name in enumerate(["MIDTERM", "FINALS"], start=1):
         topics = resolved_terms[term_name]
-        if len(topics) > 7:
-            raise ValueError(
-                f"{term_name} has {len(topics)} topics, but the selected TOS template only supports 7 topic rows."
-            )
         plans = [
             TermTopicPlan(
                 uc_index=topic.uc_index,
@@ -752,6 +860,98 @@ def sanitize_xml_text(text: str) -> str:
         if code in (0x9, 0xA, 0xD) or code >= 0x20:
             cleaned.append(ch)
     return "".join(cleaned)
+
+
+def split_cell_ref(cell_ref: str) -> tuple[str, int]:
+    match = re.fullmatch(r"([A-Z]+)(\d+)", cell_ref)
+    if not match:
+        raise ValueError(f"Unsupported cell reference: {cell_ref}")
+    return match.group(1), int(match.group(2))
+
+
+def shift_row_refs(text: str, start_row: int, offset: int) -> str:
+    def repl(match: re.Match[str]) -> str:
+        col = match.group(1)
+        row = int(match.group(2))
+        if row >= start_row:
+            row += offset
+        return f"{col}{row}"
+
+    return re.sub(r"([A-Z]+)(\d+)", repl, text)
+
+
+def expand_topic_rows(root: ET.Element, topic_count: int) -> tuple[int, int]:
+    topic_row_start = 13
+    topic_row_capacity = 7
+    topic_row_end = topic_row_start + topic_row_capacity - 1
+    totals_row = topic_row_end + 1
+    items_total_row = totals_row + 1
+    extra_rows = max(0, topic_count - topic_row_capacity)
+    if extra_rows == 0:
+        return totals_row, items_total_row
+
+    sheet_data = root.find(f"{{{MAIN_NS}}}sheetData")
+    if sheet_data is None:
+        raise ValueError("Worksheet is missing sheetData.")
+
+    rows = sheet_data.findall(f"{{{MAIN_NS}}}row")
+    row_nodes = {int(row.get("r", "0")): row for row in rows}
+    template_row = row_nodes.get(topic_row_end)
+    if template_row is None:
+        raise ValueError("Could not locate the last topic row in the TOS template.")
+
+    for row in sorted(rows, key=lambda node: int(node.get("r", "0")), reverse=True):
+        current_row = int(row.get("r", "0"))
+        if current_row < totals_row:
+            continue
+        new_row = current_row + extra_rows
+        row.set("r", str(new_row))
+        for cell in row.findall(f"{{{MAIN_NS}}}c"):
+            col, _ = split_cell_ref(cell.get("r", ""))
+            cell.set("r", f"{col}{new_row}")
+            formula = cell.find(f"{{{MAIN_NS}}}f")
+            if formula is not None:
+                if formula.get("ref"):
+                    formula.set("ref", shift_row_refs(formula.get("ref", ""), totals_row, extra_rows))
+                if formula.text:
+                    formula.text = shift_row_refs(formula.text, totals_row, extra_rows)
+
+    insert_after = row_nodes[topic_row_end]
+    insert_index = list(sheet_data).index(insert_after) + 1
+    for extra_index in range(1, extra_rows + 1):
+        new_row_num = topic_row_end + extra_index
+        new_row = copy.deepcopy(template_row)
+        new_row.set("r", str(new_row_num))
+        for cell in new_row.findall(f"{{{MAIN_NS}}}c"):
+            col, _ = split_cell_ref(cell.get("r", ""))
+            cell.set("r", f"{col}{new_row_num}")
+        sheet_data.insert(insert_index, new_row)
+        insert_index += 1
+
+    merge_cells = root.find(f"{{{MAIN_NS}}}mergeCells")
+    if merge_cells is not None:
+        existing_refs = {merge.get("ref", "") for merge in merge_cells.findall(f"{{{MAIN_NS}}}mergeCell")}
+        for merge in merge_cells.findall(f"{{{MAIN_NS}}}mergeCell"):
+            ref = merge.get("ref", "")
+            if ref:
+                merge.set("ref", shift_row_refs(ref, totals_row, extra_rows))
+        for extra_index in range(1, extra_rows + 1):
+            row_num = topic_row_end + extra_index
+            for ref in [f"C{row_num}:E{row_num}", f"F{row_num}:I{row_num}"]:
+                if ref in existing_refs:
+                    continue
+                merge_node = ET.SubElement(merge_cells, f"{{{MAIN_NS}}}mergeCell")
+                merge_node.set("ref", ref)
+                existing_refs.add(ref)
+        merge_cells.set("count", str(len(merge_cells.findall(f"{{{MAIN_NS}}}mergeCell"))))
+
+    dimension = root.find(f"{{{MAIN_NS}}}dimension")
+    if dimension is not None and dimension.get("ref"):
+        start_ref, end_ref = dimension.get("ref", "").split(":")
+        end_col, end_row = split_cell_ref(end_ref)
+        dimension.set("ref", f"{start_ref}:{end_col}{end_row + extra_rows}")
+
+    return totals_row + extra_rows, items_total_row + extra_rows
 
 
 def find_cell(root: ET.Element, cell_ref: str) -> ET.Element:
@@ -814,11 +1014,13 @@ def write_tos_workbook(
     total_days = sum(plan.number_of_days for plan in plans)
     with zipfile.ZipFile(template_path, "r") as zin:
         root = ET.fromstring(zin.read(SHEET_XML_PATH))
+        totals_row, items_total_row = expand_topic_rows(root, len(plans))
 
         set_cell_string(root, "B8", f"{course_code} - {course_title}")
         set_cell_string(root, "B9", "Midterm Examination" if term_name == "MIDTERM" else "Finals Examination")
 
         for row_num, plan in enumerate(plans, start=13):
+            set_cell_string(root, f"B{row_num}", str(row_num - 12))
             set_cell_string(root, f"C{row_num}", plan.title)
             set_cell_string(root, f"F{row_num}", plan.objective)
             set_cell_string(root, f"J{row_num}", array_text(plan.k_array))
@@ -835,11 +1037,11 @@ def write_tos_workbook(
             for col in ["M", "N", "O", "P"]:
                 set_cell_number(root, f"{col}{row_num}", 0)
 
-        set_cell_number(root, "M20", total_days)
-        set_cell_number(root, "N20", 100)
-        set_cell_number(root, "O20", 1)
-        set_cell_number(root, "P20", 50)
-        set_cell_number(root, "P21", 50)
+        set_cell_number(root, f"M{totals_row}", total_days)
+        set_cell_number(root, f"N{totals_row}", 100)
+        set_cell_number(root, f"O{totals_row}", 1)
+        set_cell_number(root, f"P{totals_row}", 50)
+        set_cell_number(root, f"P{items_total_row}", 50)
 
         updated_sheet = ensure_sheet_namespace_declarations(
             ET.tostring(root, encoding="utf-8", xml_declaration=True)
@@ -916,19 +1118,34 @@ def generate_exam_items_for_topic(
     distractor_pool: list[str],
 ) -> list[dict]:
     subtopics = plan.subtopics or [plan.title]
+    clean_subtopics = [concise_focus_text(s) for s in subtopics]
     items: list[dict] = []
     context_shift = rng.randrange(8)
     goal_shift = rng.randrange(10)
     voice_shift = rng.randrange(6)
 
-    def focus_phrase(index: int) -> str:
-        primary = subtopics[index % len(subtopics)]
-        if len(subtopics) == 1:
+    def focus_phrase(index: int, *, mode: str = "mixed") -> str:
+        primary = clean_subtopics[index % len(clean_subtopics)]
+        if len(clean_subtopics) == 1:
             return primary
-        secondary = subtopics[(index + 1) % len(subtopics)]
+        if mode == "single":
+            singles = [
+                primary,
+                f"the concept of {primary}",
+                f"the use of {primary}",
+                f"the role of {primary}",
+            ]
+            return singles[index % len(singles)]
+        secondary = clean_subtopics[(index + 1) % len(clean_subtopics)]
         if normalize_spaces(primary).lower() == normalize_spaces(secondary).lower():
             return primary
-        return f"{primary} together with {secondary}"
+        variants = [
+            f"{primary} together with {secondary}",
+            f"{primary} as it relates to {secondary}",
+            f"the relationship between {primary} and {secondary}",
+            f"{secondary} in connection with {primary}",
+        ]
+        return variants[index % len(variants)]
 
     def add_item(level: str, question: str, correct: str) -> None:
         choices, answer = choice_pack(correct, distinct_distractors(distractor_pool, correct, rng), rng)
@@ -1022,32 +1239,41 @@ def generate_exam_items_for_topic(
         "The workflow must still be understandable during troubleshooting.",
         "The selected method must fit the available system resources.",
     ]
+    scenario_hooks = [
+        "A supervisor is reviewing the result.",
+        "A trainee must justify the chosen step.",
+        "A team member needs a clear basis for the decision.",
+        "The task will be checked against store procedures.",
+        "The output will be compared with a previous report.",
+        "The activity must still make sense to another worker.",
+    ]
 
     for idx in range(plan.knowledge_count):
-        subject = focus_phrase(idx)
+        subject = focus_phrase(idx, mode="single")
         stem = knowledge_stems[(idx + plan.topic_index) % len(knowledge_stems)]
         context = contexts[(idx + context_shift) % len(contexts)]
         goal = goals[(idx + plan.uc_index + plan.topic_index + goal_shift) % len(goals)]
-        add_item("knowledge", stem.format(subject=subject, topic=plan.title, context=context, goal=goal), subtopics[idx % len(subtopics)])
+        add_item("knowledge", stem.format(subject=subject, topic=plan.title, context=context, goal=goal), clean_subtopics[idx % len(clean_subtopics)])
 
     for idx in range(plan.comprehension_count):
-        subject = focus_phrase(idx + 1)
+        subject = focus_phrase(idx + 1, mode="single")
         stem = comprehension_stems[(idx + plan.uc_index) % len(comprehension_stems)]
         context = contexts[(idx + 2 + plan.topic_index + context_shift) % len(contexts)]
         goal = goals[(idx + 3 + plan.uc_index + goal_shift) % len(goals)]
-        add_item("comprehension", stem.format(subject=subject, topic=plan.title, context=context, goal=goal), subtopics[idx % len(subtopics)])
+        add_item("comprehension", stem.format(subject=subject, topic=plan.title, context=context, goal=goal), clean_subtopics[idx % len(clean_subtopics)])
 
     for idx in range(plan.application_count):
-        subject = focus_phrase(idx + 2)
+        subject = focus_phrase(idx + 2, mode="single" if len(clean_subtopics) <= 4 else "mixed")
         stem = application_stems[(idx + plan.uc_index + plan.topic_index) % len(application_stems)]
         context = contexts[(idx + 4 + plan.uc_index + context_shift) % len(contexts)]
         goal = goals[(idx + 5 + plan.topic_index + goal_shift) % len(goals)]
         action = actions[(idx + voice_shift) % len(actions)]
         outcome = outcomes[(idx + plan.topic_index + voice_shift) % len(outcomes)]
         consideration = considerations[(idx + plan.uc_index + plan.topic_index + goal_shift) % len(considerations)]
+        hook = scenario_hooks[(idx + plan.uc_index + voice_shift) % len(scenario_hooks)]
         question = stem.format(subject=subject, topic=plan.title, context=context, goal=goal)
-        question = f"{question[:-1]} while {action} {outcome}? {consideration}"
-        add_item("application", question, subtopics[idx % len(subtopics)])
+        question = f"{hook} {question[:-1]} while {action} {outcome}? {consideration}"
+        add_item("application", question, clean_subtopics[idx % len(clean_subtopics)])
 
     return items
 
