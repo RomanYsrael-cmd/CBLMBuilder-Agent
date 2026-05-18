@@ -227,6 +227,10 @@ Exam authoring rule:
   - question 2 must match the level expected by the TOS arrays
   - and so on through question 50
 - do not let comprehension collapse to zero when the TOS plan expects comprehension items
+- do not make the answer key pattern obviously predictable or heavily concentrated on one letter
+- distribute correct answers across `A`, `B`, `C`, and `D`
+- each answer option must appear often enough across the 50-item exam; do not let one option dominate the answer key
+- avoid long streaks of the same correct answer letter
 - after CODEX authors the MCQs, render the exam DOCX files with:
   - `.\.venv\Scripts\python.exe .\tools\render_exam_from_state.py ".\state\tos\<COURSE_CODE>\MIDTERM.json"`
   - `.\.venv\Scripts\python.exe .\tools\render_exam_from_state.py ".\state\tos\<COURSE_CODE>\FINALS.json"`

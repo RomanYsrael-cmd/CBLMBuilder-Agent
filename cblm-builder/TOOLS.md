@@ -104,16 +104,32 @@ Render one term exam DOCX from a CODEX-authored term state JSON containing exact
 Validation behavior:
 - requires each MCQ to include `level=knowledge|comprehension|application`
 - enforces that the authored MCQ order matches the TOS numbering arrays exactly
+- enforces answer-key variety so the correct option is not overly concentrated on one letter
+- rejects long repetitive runs in the answer key pattern
 - appends a `MODEL ANSWER KEY` section after the 50-item exam
 
 Example:
 `.\.venv\Scripts\python.exe .\tools\render_exam_from_state.py ".\state\tos\<COURSE_CODE>\MIDTERM.json"`
+
+### tools/rebalance_authored_answers.py
+Reposition the correct answer across `A/B/C/D` in a CODEX-authored term state JSON without changing the question wording or the correct content.
+
+Use this after CODEX authors the MCQs and before rendering if the answer-key pattern is too concentrated on one letter.
+
+Behavior:
+- preserves the existing correct choice text
+- redistributes answer letters into a balanced deterministic pattern
+- validates the final answer distribution immediately
+
+Example:
+`.\.venv\Scripts\python.exe .\tools\rebalance_authored_answers.py ".\state\tos\<COURSE_CODE>\MIDTERM.json"`
 
 ### tools/render_term_ia_from_authored_state.py
 Render one term-specific IA DOCX from a CODEX-authored IA payload JSON and a CODEX-authored term state JSON.
 
 Validation behavior:
 - enforces the same authored MCQ level/order checks used by `render_exam_from_state.py`
+- enforces the same answer-key variety checks used by `render_exam_from_state.py`
 - renders a TOS snapshot image from `output/tos/TOS_<COURSE_CODE>_<TERM>.xlsx` when available
 - inserts that TOS snapshot into the IA before the term exam section
 - appends the term exam plus its `MODEL ANSWER KEY` inside the term IA output

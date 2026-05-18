@@ -1,9 +1,15 @@
+import hashlib
 import json
+import random
 from collections import Counter
 from pathlib import Path
 
 
 VALID_LEVELS = {"knowledge", "comprehension", "application"}
+VALID_ANSWER_CHOICES = {"A", "B", "C", "D"}
+MIN_OPTION_COUNT = 8
+MAX_OPTION_COUNT = 17
+MAX_CONSECUTIVE_SAME_ANSWER = 3
 
 
 def load_state_json(path: Path) -> dict:
@@ -66,6 +72,7 @@ def validate_authored_mcq_state(payload: dict) -> dict:
         raise ValueError(f"TOS numbering arrays resolve to {len(expected_sequence)} items instead of 50.")
 
     actual_levels: list[str] = []
+    answer_sequence: list[str] = []
     for idx, item in enumerate(mcqs, start=1):
         if not isinstance(item, dict):
             raise ValueError(f"MCQ #{idx} must be an object.")
@@ -80,8 +87,10 @@ def validate_authored_mcq_state(payload: dict) -> dict:
             value = str(item.get(key, "")).strip()
             if not value:
                 raise ValueError(f"MCQ #{idx} is missing required field: {key}")
-        if str(item.get("answer", "")).strip().upper() not in {"A", "B", "C", "D"}:
+        answer = str(item.get("answer", "")).strip().upper()
+        if answer not in VALID_ANSWER_CHOICES:
             raise ValueError(f"MCQ #{idx} answer must be one of A, B, C, or D.")
+        answer_sequence.append(answer)
 
         expected = expected_sequence[idx - 1]
         if level != expected:
@@ -89,9 +98,95 @@ def validate_authored_mcq_state(payload: dict) -> dict:
                 f"MCQ #{idx} level mismatch: expected {expected} from the TOS arrays, got {level}."
             )
 
+    answer_counts = Counter(answer_sequence)
+    for option in sorted(VALID_ANSWER_CHOICES):
+        count = answer_counts.get(option, 0)
+        if count < MIN_OPTION_COUNT or count > MAX_OPTION_COUNT:
+            raise ValueError(
+                f"Answer key distribution is too lopsided: option {option} appears {count} times. "
+                f"Each option must appear between {MIN_OPTION_COUNT} and {MAX_OPTION_COUNT} times."
+            )
+
+    run_answer = None
+    run_length = 0
+    for idx, answer in enumerate(answer_sequence, start=1):
+        if answer == run_answer:
+            run_length += 1
+        else:
+            run_answer = answer
+            run_length = 1
+        if run_length > MAX_CONSECUTIVE_SAME_ANSWER:
+            raise ValueError(
+                f"Answer key pattern is too repetitive: option {answer} repeats more than "
+                f"{MAX_CONSECUTIVE_SAME_ANSWER} times in a row ending at MCQ #{idx}."
+            )
+
     return {
         "expected_counts": dict(Counter(expected_sequence)),
         "actual_counts": dict(Counter(actual_levels)),
         "expected_sequence": expected_sequence,
+        "answer_counts": dict(answer_counts),
     }
 
+
+def build_balanced_answer_pattern(course_code: str, term: str, count: int = 50) -> list[str]:
+    base_counts = {"A": 13, "B": 13, "C": 12, "D": 12}
+    answers: list[str] = []
+    for option, qty in base_counts.items():
+        answers.extend([option] * qty)
+    if len(answers) != count:
+        raise ValueError(f"Balanced answer pattern is configured for {count} items.")
+
+    seed_bytes = hashlib.sha256(f"{course_code}|{term}|answer-pattern".encode("utf-8")).digest()
+    rng = random.Random(int.from_bytes(seed_bytes[:8], "big"))
+
+    for _ in range(5000):
+        rng.shuffle(answers)
+        run_option = None
+        run_length = 0
+        ok = True
+        for answer in answers:
+            if answer == run_option:
+                run_length += 1
+            else:
+                run_option = answer
+                run_length = 1
+            if run_length > MAX_CONSECUTIVE_SAME_ANSWER:
+                ok = False
+                break
+        if ok:
+            return list(answers)
+
+    raise ValueError("Could not construct a balanced answer pattern without repetitive streaks.")
+
+
+def rebalance_mcq_answers(payload: dict) -> dict:
+    mcqs = payload.get("mcqs")
+    course_code = str(payload.get("course_code", "")).strip()
+    term = str(payload.get("term", "")).strip().upper()
+    if not isinstance(mcqs, list) or len(mcqs) != 50:
+        raise ValueError("State JSON must contain exactly 50 MCQs in mcqs before rebalancing answers.")
+
+    target_pattern = build_balanced_answer_pattern(course_code, term, len(mcqs))
+    option_keys = ["A", "B", "C", "D"]
+    field_map = {"A": "a", "B": "b", "C": "c", "D": "d"}
+
+    for idx, (item, target_answer) in enumerate(zip(mcqs, target_pattern, strict=True), start=1):
+        current_answer = str(item.get("answer", "")).strip().upper()
+        if current_answer not in VALID_ANSWER_CHOICES:
+            raise ValueError(f"MCQ #{idx} answer must be one of A, B, C, or D before rebalancing.")
+
+        correct_text = item[field_map[current_answer]]
+        distractors = [item[field_map[key]] for key in option_keys if key != current_answer]
+        ordered_texts: list[str] = []
+        distractor_iter = iter(distractors)
+        for key in option_keys:
+            if key == target_answer:
+                ordered_texts.append(correct_text)
+            else:
+                ordered_texts.append(next(distractor_iter))
+        for key, text in zip(option_keys, ordered_texts, strict=True):
+            item[field_map[key]] = text
+        item["answer"] = target_answer
+
+    return payload
