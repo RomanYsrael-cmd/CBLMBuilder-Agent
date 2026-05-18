@@ -73,6 +73,54 @@ Outputs:
 Example:
 `.\.venv\Scripts\python.exe .\tools\build_tos_and_exam_from_syllabus.py`
 
+### tools/build_tos_plan_from_syllabus.py
+Build two TOS workbooks (`MIDTERM`, `FINALS`) from a syllabus and write term state JSON scaffolds without generating MCQs.
+
+Use this when CODEX should author the exam items directly.
+
+State JSON behavior:
+- writes `expected_level_counts`
+- writes `authoring_requirements`
+- preserves `k_array`, `c_array`, and `a_array` so CODEX can align question order to the TOS exactly
+
+Outputs:
+- `output/tos/TOS_<COURSE_CODE>_MIDTERM.xlsx`
+- `output/tos/TOS_<COURSE_CODE>_FINALS.xlsx`
+- `state/tos/<COURSE_CODE>/MIDTERM.json`
+- `state/tos/<COURSE_CODE>/FINALS.json`
+
+### tools/scaffold_term_ia_from_syllabus.py
+Create term-specific IA payload scaffolds from a syllabus without generating oral questions or acceptable answers.
+
+Use this when CODEX should author the oral questions directly.
+
+Outputs:
+- `state/ia_payloads/<COURSE_CODE>/IA_MIDTERM.json`
+- `state/ia_payloads/<COURSE_CODE>/IA_FINALS.json`
+
+### tools/render_exam_from_state.py
+Render one term exam DOCX from a CODEX-authored term state JSON containing exactly 50 MCQs.
+
+Validation behavior:
+- requires each MCQ to include `level=knowledge|comprehension|application`
+- enforces that the authored MCQ order matches the TOS numbering arrays exactly
+- appends a `MODEL ANSWER KEY` section after the 50-item exam
+
+Example:
+`.\.venv\Scripts\python.exe .\tools\render_exam_from_state.py ".\state\tos\<COURSE_CODE>\MIDTERM.json"`
+
+### tools/render_term_ia_from_authored_state.py
+Render one term-specific IA DOCX from a CODEX-authored IA payload JSON and a CODEX-authored term state JSON.
+
+Validation behavior:
+- enforces the same authored MCQ level/order checks used by `render_exam_from_state.py`
+- renders a TOS snapshot image from `output/tos/TOS_<COURSE_CODE>_<TERM>.xlsx` when available
+- inserts that TOS snapshot into the IA before the term exam section
+- appends the term exam plus its `MODEL ANSWER KEY` inside the term IA output
+
+Example:
+`.\.venv\Scripts\python.exe .\tools\render_term_ia_from_authored_state.py ".\state\ia_payloads\<COURSE_CODE>\IA_MIDTERM.json" ".\state\tos\<COURSE_CODE>\MIDTERM.json"`
+
 ### tools/exam_builder.py
 Build term exam DOCX files using `templates/EXAM TEMPLATE.docx` and MCQs sourced from unit payloads (`exercise_questions` per content item).
 

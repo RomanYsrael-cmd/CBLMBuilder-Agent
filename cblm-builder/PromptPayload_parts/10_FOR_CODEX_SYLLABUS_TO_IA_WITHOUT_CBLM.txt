@@ -33,18 +33,19 @@ Goal:
 
 Starting from ONE syllabus file in ./inbox:
 1. Extract the course structure directly from the syllabus.
-2. Build the course-level IA package without generating any CBLM DOCX files.
+2. Build separate MIDTERM and FINALS IA packages without generating any CBLM DOCX files.
 3. Generate syllabus-derived MIDTERM and FINALS TOS workbooks plus matching 50-item exam DOCX files using the patched TOS/exam workflow.
 4. Move the syllabus to ./processed only after all requested outputs are completed successfully.
 
 Required deliverable rule:
 
-Treat one successful run as exactly 3 output packages:
-- Package 1: the IA package
-- Package 2: the MIDTERM TOS package
-- Package 3: the FINALS TOS package
+Treat one successful run as exactly 4 output packages:
+- Package 1: the MIDTERM IA package
+- Package 2: the FINALS IA package
+- Package 3: the MIDTERM TOS package
+- Package 4: the FINALS TOS package
 
-The run is not complete unless all 3 packages exist.
+The run is not complete unless all 4 packages exist.
 
 General rules:
 
@@ -56,7 +57,14 @@ Follow the workspace files as the source of truth.
 Do NOT generate CBLM DOCX files in this workflow.
 Do NOT claim that this workflow assembled `CBLM_FULL.docx`.
 Use the raw syllabus as the source of truth for both IA structure and TOS-aligned exams.
-Do not manually rewrite the TOS workbook XML outside the dedicated tool path; use `tools/build_tos_and_exam_from_syllabus.py` as the only TOS workbook writer.
+Do not manually rewrite the TOS workbook XML outside the dedicated tool path.
+In this workflow, tools may extract, scaffold, validate, and render files, but CODEX must author the oral questions, acceptable answers, and exam items.
+Use the Codex-authored term-aware path for this workflow:
+- `tools/build_tos_plan_from_syllabus.py`
+- `tools/scaffold_term_ia_from_syllabus.py`
+- `tools/render_exam_from_state.py`
+- `tools/render_term_ia_from_authored_state.py`
+- `tools/assemble_ia_term.py`
 
 Syllabus mapping rule:
 
@@ -78,14 +86,50 @@ Direct IA rule:
 
 Because this workflow skips CBLM generation, build the IA package directly from the syllabus-derived structure.
 
-Create a NEW IA payload JSON that is compatible with tools/assemble_ia.py and the updated IA templates.
+Create NEW IA payload JSON files that are compatible with `tools/assemble_ia_term.py` and the updated IA templates.
+CODEX must write the oral questions and acceptable answers directly into the IA payload JSON.
 
-The IA payload must:
-- list all contents across the syllabus/course
-- preserve topic/content order
+Create one IA payload for MIDTERM scope and one IA payload for FINALS scope.
+
+The scope for MIDTERM and FINALS must be derived from the syllabus itself.
+Do not use a naive half-split unless the syllabus structure explicitly supports it.
+Use the same syllabus-derived scope boundaries for:
+- the MIDTERM IA
+- the FINALS IA
+- the MIDTERM exam
+- the FINALS exam
+- the MIDTERM oral questioning
+- the FINALS oral questioning
+
+If the syllabus provides weeks, grading periods, prelim/midterm/finals labels, sequence boundaries, or other scope indicators, use them as the source of truth for term coverage.
+If multiple syllabus signals exist, resolve the scope deterministically and keep IA, TOS, exams, and oral questioning aligned to the same term boundaries.
+
+Each term-specific IA payload must:
+- list only the contents that belong to that term's syllabus-derived scope
+- preserve topic/content order within that term
 - use content-anchored IA wording
-- generate the IA package in the template order:
-  00_FrontPage + 01_iaplan + 02_iaspesificinstruction + 03_midterm + 04_finals
+- include the term value used by the front page template:
+  - MIDTERM IA -> `term = MIDTERM`
+  - FINALS IA -> `term = FINALS`
+- include `current_unit.ia.oral_questions` as an array of exactly 5 objects:
+  - `question`
+  - `acceptable_answer`
+- let CODEX generate the oral questioning and acceptable answers directly in this workflow
+- generate model oral questions and model answers grounded in the actual syllabus-derived topics, learning outcomes, content items, module title, and next-unit context when available
+- ensure the oral questions for each IA are within that term's syllabus-derived scope only
+- do NOT use generic assessor-style acceptable answers such as:
+  - "Explains..."
+  - "Describes..."
+  - "Identifies..."
+  - "Mentions..."
+  - "States..."
+  - "References..."
+- each `acceptable_answer` must be the real answer itself, not a scoring rubric or description of what a good answer would look like
+- generate each IA package in the template order:
+  - MIDTERM IA:
+    00_FrontPage + 01_iaplan + 02_iaspesificinstruction + 05_iaquestionwithanswer + 03_midterm
+  - FINALS IA:
+    00_FrontPage + 01_iaplan + 02_iaspesificinstruction + 05_iaquestionwithanswer + 04_finals
 
 Important wording rule (for IA template {{Contents}} ONLY):
 
@@ -99,20 +143,47 @@ Therefore, generate a derived "ability phrasing" for each content title when fil
 DO NOT modify the IA template placeholder {{Contents_Z}} meaning:
 - {{Contents_Z}} remains the raw list of contents under the current LO.
 
+IA template interpretation rule:
+
+- `{{term}}` on the front page template must be populated with the current term:
+  - `MIDTERM`
+  - `FINALS`
+- `{{Y}}. {{LO}}` means:
+  - `{{Y}}` = Learning Outcome number within the current term-specific IA payload
+  - `{{LO}}` = the current Learning Outcome title
+- `{{Y}}.{{Z}}. {{Contents}}` means:
+  - `{{Y}}` = Learning Outcome number
+  - `{{Z}}` = topic number under that Learning Outcome
+  - `{{Contents}}` = the current topic title, converted to the required ability phrasing only when needed by the destination template sentence
+- `{{Contents_Z}}` means:
+  - the full raw list of all subtopics under the current topic/Learning Outcome entry
+
 IA generation rule:
 
-- Build one course-level IA payload JSON directly from the syllabus structure.
-- Save it under `state/ia_payloads/<COURSE_CODE>/IA_FULL.json`.
-- Assemble `output/ia/<COURSE_CODE>/IA_FULL.docx` using `tools/assemble_ia.py`.
+- Build one MIDTERM IA payload JSON and one FINALS IA payload JSON directly from the syllabus structure.
+- Generate 5 model oral questions for MIDTERM and 5 model oral questions for FINALS.
+- For each oral question, write one model acceptable answer that directly answers the question using the real extracted syllabus content.
+- The acceptable answer must be concrete and specific.
+- Example:
+  - Question: `What is 1 + 1?`
+  - Acceptable answer: `2`
+- If the question asks for a title, the acceptable answer must be the exact title.
+- If the question asks for a content item, the acceptable answer must be the exact content item.
+- If the question asks for the next unit, the acceptable answer must be the exact next unit when present.
+- Avoid generic wording like "Correctly explains..." or "Describes a logical sequence..." in acceptable answers.
+- Save the MIDTERM IA payload under `state/ia_payloads/<COURSE_CODE>/IA_MIDTERM.json`.
+- Save the FINALS IA payload under `state/ia_payloads/<COURSE_CODE>/IA_FINALS.json`.
+- Assemble `output/ia/<COURSE_CODE>/IA_MIDTERM.docx` using `tools/render_term_ia_from_authored_state.py`.
+- Assemble `output/ia/<COURSE_CODE>/IA_FINALS.docx` using `tools/render_term_ia_from_authored_state.py`.
 - Do not require CBLM unit DOCX files as inputs for this workflow.
 
 TOS-aligned exam rule:
 
-After the IA payload structure is ready, run the dedicated syllabus-to-TOS/exam workflow:
+After the syllabus structure is extracted, run the dedicated syllabus-to-TOS planning workflow:
 
-.\.venv\Scripts\python.exe .\tools\build_tos_and_exam_from_syllabus.py
+.\.venv\Scripts\python.exe .\tools\build_tos_plan_from_syllabus.py
 
-This workflow must:
+This planning workflow must:
 - identify all syllabus Topics
 - resolve which Topics belong to MIDTERM and FINALS
 - read week counts when present and map them to `No. of Days Taught`
@@ -132,7 +203,34 @@ This workflow must:
   - k_array
   - c_array
   - a_array
-- generate matching 1-50 MIDTERM and FINALS multiple-choice exam DOCX files from the TOS allocation
+- write the term state JSON files that CODEX will complete with authored MCQs
+
+Exam authoring rule:
+
+- CODEX must write the 50 MIDTERM MCQs directly into `state/tos/<COURSE_CODE>/MIDTERM.json`
+- CODEX must write the 50 FINALS MCQs directly into `state/tos/<COURSE_CODE>/FINALS.json`
+- the tools must not invent the exam wording for this workflow
+- each authored MCQ must include:
+  - `question`
+  - `a`
+  - `b`
+  - `c`
+  - `d`
+  - `answer`
+  - `level`
+- `level` must be one of:
+  - `knowledge`
+  - `comprehension`
+  - `application`
+- CODEX must preserve the authored MCQ order to match the TOS numbering arrays exactly:
+  - question 1 must match the level expected by the TOS arrays
+  - question 2 must match the level expected by the TOS arrays
+  - and so on through question 50
+- do not let comprehension collapse to zero when the TOS plan expects comprehension items
+- after CODEX authors the MCQs, render the exam DOCX files with:
+  - `.\.venv\Scripts\python.exe .\tools\render_exam_from_state.py ".\state\tos\<COURSE_CODE>\MIDTERM.json"`
+  - `.\.venv\Scripts\python.exe .\tools\render_exam_from_state.py ".\state\tos\<COURSE_CODE>\FINALS.json"`
+- the rendered exam DOCX must append a model answer key after the 50 multiple-choice items
 
 TOS numbering rule:
 
@@ -147,14 +245,17 @@ The question numbering arrays written into the TOS must match the generated exam
 
 Outputs required:
 
-- Package 1: IA package
-  - `state/ia_payloads/<COURSE_CODE>/IA_FULL.json`
-  - `output/ia/<COURSE_CODE>/IA_FULL.docx`
-- Package 2: MIDTERM TOS package
+- Package 1: MIDTERM IA package
+  - `state/ia_payloads/<COURSE_CODE>/IA_MIDTERM.json`
+  - `output/ia/<COURSE_CODE>/IA_MIDTERM.docx`
+- Package 2: FINALS IA package
+  - `state/ia_payloads/<COURSE_CODE>/IA_FINALS.json`
+  - `output/ia/<COURSE_CODE>/IA_FINALS.docx`
+- Package 3: MIDTERM TOS package
   - `output/tos/TOS_<COURSE_CODE>_MIDTERM.xlsx`
   - `output/exams/EXAM_<COURSE_CODE>_MIDTERM.docx`
   - `state/tos/<COURSE_CODE>/MIDTERM.json`
-- Package 3: FINALS TOS package
+- Package 4: FINALS TOS package
   - `output/tos/TOS_<COURSE_CODE>_FINALS.xlsx`
   - `output/exams/EXAM_<COURSE_CODE>_FINALS.docx`
   - `state/tos/<COURSE_CODE>/FINALS.json`
@@ -162,18 +263,54 @@ Outputs required:
 Finalization:
 
 Move the source syllabus file to ./processed only after:
-- the IA is completed
+- the MIDTERM IA is completed
+- the FINALS IA is completed
 - the TOS workbooks are completed
 - the matching exams are completed
 
 Then report:
 - syllabus file processed
 - course code and title
-- the 3 output packages written
-- IA payload path
-- IA output path
+- the 4 output packages written
+- MIDTERM IA payload path
+- MIDTERM IA output path
+- FINALS IA payload path
+- FINALS IA output path
 - MIDTERM TOS/exam paths
 - FINALS TOS/exam paths
 - syllabus moved to processed
+
+Preferred execution path:
+
+1. Extract TOS plans and write scaffold term states:
+
+.\.venv\Scripts\python.exe .\tools\build_tos_plan_from_syllabus.py
+
+2. Scaffold IA payloads from the syllabus:
+
+.\.venv\Scripts\python.exe .\tools\scaffold_term_ia_from_syllabus.py
+
+3. Let CODEX author:
+- the 5 oral questions and acceptable answers in:
+  - `state/ia_payloads/<COURSE_CODE>/IA_MIDTERM.json`
+  - `state/ia_payloads/<COURSE_CODE>/IA_FINALS.json`
+- the 50 MCQs in:
+  - `state/tos/<COURSE_CODE>/MIDTERM.json`
+  - `state/tos/<COURSE_CODE>/FINALS.json`
+
+4. Render the authored outputs:
+- `.\.venv\Scripts\python.exe .\tools\render_exam_from_state.py ".\state\tos\<COURSE_CODE>\MIDTERM.json"`
+- `.\.venv\Scripts\python.exe .\tools\render_exam_from_state.py ".\state\tos\<COURSE_CODE>\FINALS.json"`
+- `.\.venv\Scripts\python.exe .\tools\render_term_ia_from_authored_state.py ".\state\ia_payloads\<COURSE_CODE>\IA_MIDTERM.json" ".\state\tos\<COURSE_CODE>\MIDTERM.json"`
+- `.\.venv\Scripts\python.exe .\tools\render_term_ia_from_authored_state.py ".\state\ia_payloads\<COURSE_CODE>\IA_FINALS.json" ".\state\tos\<COURSE_CODE>\FINALS.json"`
+
+TOS snapshot rule:
+
+- before the exam section in each term-specific IA, include a rendered image snapshot of the term TOS workbook
+- render the visible TOS table block as an image from column `A` through three columns after `No. of Items`:
+  - `A:S`
+- include the TOS table through the `TOTAL` row
+
+5. Move the syllabus to `./processed` only after all 4 packages are completed successfully.
 
 Execute now.

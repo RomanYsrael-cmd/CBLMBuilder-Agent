@@ -8,9 +8,8 @@ from docx.enum.style import WD_STYLE_TYPE
 from docx.enum.text import WD_BREAK
 from docx.oxml.ns import qn
 from docx.shared import Pt
+from docx.shared import Inches
 from docxcompose.composer import Composer
-
-from ia_oral_questions import build_oral_questions_from_payload
 
 
 FONT_NAME = "Arial Narrow"
@@ -145,11 +144,6 @@ _COMMON_VERBS = {
 
 
 def to_ability_phrase(content_title):
-    """
-    Adjust a content title so it reads correctly after:
-    'The evidence must show that the trainee can ...'
-    Keeps the meaning; prefers minimal changes.
-    """
     title = safe_text(content_title).strip()
     if not title:
         return ""
@@ -160,7 +154,6 @@ def to_ability_phrase(content_title):
     first_word = lower.split()[0] if lower.split() else ""
     if first_word in _COMMON_VERBS:
         return title[:1].lower() + title[1:]
-    # Fallback: avoid ungrammatical noun phrases after "can".
     return f"demonstrate competence in {title}"
 
 
@@ -170,8 +163,11 @@ def _get_unit(payload):
     return payload["current_unit"]
 
 
-def _default_oral_questions(payload):
-    return build_oral_questions_from_payload(payload)
+def _get_term(payload):
+    term = safe_text(payload.get("term", "")).strip().upper()
+    if term not in {"MIDTERM", "FINALS"}:
+        raise ValueError("Payload missing valid top-level field: term")
+    return term
 
 
 def _get_oral_questions(payload):
@@ -179,7 +175,7 @@ def _get_oral_questions(payload):
     ia_block = unit.get("ia") or {}
     oral_questions = ia_block.get("oral_questions")
     if not isinstance(oral_questions, list):
-        return _default_oral_questions(payload)
+        raise ValueError("Payload missing current_unit.ia.oral_questions")
 
     normalized = []
     for item in oral_questions:
@@ -191,24 +187,22 @@ def _get_oral_questions(payload):
             normalized.append({"question": question, "acceptable_answer": acceptable_answer})
         if len(normalized) >= 5:
             break
-
-    if len(normalized) < 5:
-        defaults = _default_oral_questions(payload)
-        for item in defaults:
-            if len(normalized) >= 5:
-                break
-            normalized.append(item)
-    return normalized[:5]
+    if len(normalized) != 5:
+        raise ValueError("Payload must provide exactly 5 oral questions with acceptable answers")
+    return normalized
 
 
 def render_front_page(template_path, payload):
     doc = Document(template_path)
     enforce_document_font(doc)
+    term = _get_term(payload)
     apply_scalar_map(
         doc,
         {
             "qualification": payload.get("qualification_title", ""),
             "qualification_title": payload.get("qualification_title", ""),
+            "term": term,
+            "TERM": term,
         },
     )
     normalize_all_runs_font(doc)
@@ -218,11 +212,14 @@ def render_front_page(template_path, payload):
 def render_specific_instructions(template_path, payload):
     doc = Document(template_path)
     enforce_document_font(doc)
+    term = _get_term(payload)
     apply_scalar_map(
         doc,
         {
             "qualification": payload.get("qualification_title", ""),
             "qualification_title": payload.get("qualification_title", ""),
+            "term": term,
+            "TERM": term,
         },
     )
     normalize_all_runs_font(doc)
@@ -244,22 +241,36 @@ def render_oral_questions(template_path, payload):
     return doc
 
 
-def _fill_plan_or_rating_table(table, unit, adjust_contents=True, include_contents_list_col=False):
-    # Identify dynamic rows (those with placeholders).
+def _subtopics_text(content):
+    out = []
+    for idx, sub in enumerate(content.get("subtopics") or [], start=1):
+        if isinstance(sub, dict):
+            title = safe_text(sub.get("title", "")).strip()
+        else:
+            title = safe_text(sub).strip()
+        if not title:
+            continue
+        out.append(title)
+    return "\n".join(out)
+
+
+def _fill_plan_or_rating_table(table, unit):
     def row_has_any(row, needles):
         return any(any(n in cell.text for n in needles) for cell in row.cells)
 
-    # Only rows that participate in the LO/contents pattern.
     placeholders = ["{{LO}}", "{{Contents}}", "{{Contents_Z}}", "{{Y}}", "{{Z}}"]
     dynamic_row_indexes = [i for i, r in enumerate(table.rows) if row_has_any(r, placeholders)]
-    # Exclude header scalar rows (e.g., unit/module) that might contain braces but aren't part of the LO/content grid.
-    dynamic_row_indexes = [i for i in dynamic_row_indexes if "{{unit_of_competency}}" not in "|".join(c.text for c in table.rows[i].cells) and "{{module_title}}" not in "|".join(c.text for c in table.rows[i].cells)]
+    dynamic_row_indexes = [
+        i
+        for i in dynamic_row_indexes
+        if "{{unit_of_competency}}" not in "|".join(c.text for c in table.rows[i].cells)
+        and "{{module_title}}" not in "|".join(c.text for c in table.rows[i].cells)
+    ]
 
     los = unit.get("learning_outcomes", []) or []
     lo_iter = iter(los)
     current_lo = None
     current_contents_iter = iter(())
-
     used_row_indexes = []
 
     for row_index in dynamic_row_indexes:
@@ -282,39 +293,29 @@ def _fill_plan_or_rating_table(table, unit, adjust_contents=True, include_conten
             used_row_indexes.append(row_index)
             continue
 
-        # Content row: requires an active LO.
         if not current_lo:
             break
 
         content = next(current_contents_iter, None)
         if not content:
-            # No more contents for this LO; stop consuming content rows until the next LO row.
-            # Leave row for later deletion.
             continue
 
         y = current_lo.get("index", "")
         z = content.get("index", "")
         content_title = safe_text(content.get("title", ""))
-        content_for_contents = to_ability_phrase(content_title) if adjust_contents else content_title
-
-        contents_list = "\n".join(
-            safe_text(c.get("title", "")).strip()
-            for c in (current_lo.get("contents", []) or [])
-            if safe_text(c.get("title", "")).strip()
-        )
+        content_for_contents = to_ability_phrase(content_title)
+        contents_list = _subtopics_text(content)
 
         for cell in row.cells:
             text = cell.text.replace("{{Y}}", safe_text(y)).replace("{{Z}}", safe_text(z))
             text = text.replace("{{Contents}}", content_for_contents)
-            if include_contents_list_col:
-                text = text.replace("{{Contents_Z}}", contents_list)
+            text = text.replace("{{Contents_Z}}", contents_list)
             write_text_to_paragraph(cell.paragraphs[0], text)
             for p in cell.paragraphs[1:]:
                 p._element.getparent().remove(p._element)
 
         used_row_indexes.append(row_index)
 
-    # Delete all placeholder rows that weren't used.
     used = set(used_row_indexes)
     for row_index in reversed(dynamic_row_indexes):
         if row_index not in used:
@@ -325,39 +326,30 @@ def render_ia_plan(template_path, payload):
     doc = Document(template_path)
     enforce_document_font(doc)
     unit = _get_unit(payload)
+    term = _get_term(payload)
 
     apply_scalar_map(
         doc,
         {
             "qualification": payload.get("qualification_title", ""),
             "qualification_title": payload.get("qualification_title", ""),
+            "term": term,
+            "TERM": term,
         },
     )
 
-    # Table 0 contains LO/content listing.
     if doc.tables:
-        table = doc.tables[0]
-        _fill_plan_or_rating_table(
-            table,
-            unit,
-            adjust_contents=True,  # ability phrasing for {{Contents}}
-            include_contents_list_col=True,  # fill {{Contents_Z}} with raw list of titles
-        )
+        _fill_plan_or_rating_table(doc.tables[0], unit)
 
     normalize_all_runs_font(doc)
     return doc
 
 
-def render_exam(template_path, *, course_code: str, course_title: str, mcqs: list[dict]) -> Document:
-    """
-    Fill the MIDTERM/FINALS templates (50 questions).
-    Expected placeholders: {{COURSE_CODE}}, {{COURSE_TITLE}}, {{Q_NUM}}, {{QUESTION}}, {{Q_CHOICE1..4}}.
-    """
+def render_exam(template_path, *, course_code: str, course_title: str, term: str, mcqs: list[dict]) -> Document:
     doc = Document(template_path)
     enforce_document_font(doc)
-    apply_scalar_map(doc, {"COURSE_CODE": course_code, "COURSE_TITLE": course_title, "TERM": ""})
+    apply_scalar_map(doc, {"COURSE_CODE": course_code, "COURSE_TITLE": course_title, "TERM": term, "term": term})
 
-    # Locate question table (expected 25 rows x 2 columns; total 50 cells).
     question_table = None
     for table in doc.tables:
         if len(table.rows) == 25 and len(table.columns) == 2:
@@ -385,54 +377,87 @@ def render_exam(template_path, *, course_code: str, course_title: str, mcqs: lis
         }
         apply_scalar_map(cells[idx - 1], mapping)
 
+    doc.add_page_break()
+    heading = doc.add_paragraph()
+    heading.add_run("MODEL ANSWER KEY")
+    key_table = doc.add_table(rows=25, cols=2)
+    key_table.style = question_table.style
+    for row_index in range(25):
+        left = row_index + 1
+        right = row_index + 26
+        key_table.rows[row_index].cells[0].text = f"{left}. {safe_text(mcqs[left - 1].get('answer', '')).strip().upper()}"
+        key_table.rows[row_index].cells[1].text = f"{right}. {safe_text(mcqs[right - 1].get('answer', '')).strip().upper()}"
+
     normalize_all_runs_font(doc)
     return doc
 
 
-def assemble_ia(payload_path, output_path, templates_dir="templates/IA TEMPLATES"):
+def render_tos_snapshot_page(image_path, *, term: str, course_code: str, course_title: str) -> Document:
+    doc = Document()
+    enforce_document_font(doc)
+    heading = doc.add_paragraph()
+    run = heading.add_run(f"{term} TOS SNAPSHOT")
+    run.bold = True
+    set_run_font(run)
+
+    subtitle = doc.add_paragraph()
+    subtitle_run = subtitle.add_run(f"{course_code} - {course_title}")
+    set_run_font(subtitle_run)
+
+    doc.add_picture(str(image_path), width=Inches(7.2))
+    normalize_all_runs_font(doc)
+    return doc
+
+
+def assemble_ia_term(payload_path, output_path, templates_dir="templates/IA TEMPLATES"):
     payload_path = Path(payload_path)
     output_path = Path(output_path)
     templates_dir = Path(templates_dir)
 
     payload = json.loads(payload_path.read_text(encoding="utf-8"))
+    term = _get_term(payload)
+    exams = payload.get("exams") or {}
+    if not isinstance(exams, dict):
+        raise ValueError("IA payload missing required field: exams")
+
+    course_code = safe_text(exams.get("course_code", "")).strip()
+    course_title = safe_text(exams.get("course_title", "")).strip() or safe_text(payload.get("qualification_title", "")).strip()
+    mcq_key = "midterm_mcqs" if term == "MIDTERM" else "finals_mcqs"
+    template_key = "midterm" if term == "MIDTERM" else "finals"
+    exam_term = "MIDTERM" if term == "MIDTERM" else "FINAL"
+    mcqs = exams.get(mcq_key)
+    tos_snapshot_path = safe_text(payload.get("tos_snapshot_path", "")).strip()
+
+    if not course_code:
+        raise ValueError("IA payload exams.course_code must not be empty")
+    if not isinstance(mcqs, list):
+        raise ValueError(f"IA payload exams.{mcq_key} must be present (50 MCQs)")
 
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_dir = Path(temp_dir)
 
-        parts = []
-        parts.append(render_front_page(templates_dir / IA_TEMPLATE_FILES["front_page"], payload))
-        parts.append(render_ia_plan(templates_dir / IA_TEMPLATE_FILES["ia_plan"], payload))
-        parts.append(render_specific_instructions(templates_dir / IA_TEMPLATE_FILES["specific_instructions"], payload))
-        parts.append(render_oral_questions(templates_dir / IA_TEMPLATE_FILES["oral_questions"], payload))
-
-        # Exams are required for the IA package: always append MIDTERM and FINALS.
-        exams = payload.get("exams") or {}
-        if not isinstance(exams, dict):
-            raise ValueError("IA payload missing required field: exams")
-
-        course_code = safe_text(exams.get("course_code", "")).strip()
-        course_title = safe_text(exams.get("course_title", "")).strip() or safe_text(payload.get("qualification_title", "")).strip()
-        midterm_mcqs = exams.get("midterm_mcqs")
-        finals_mcqs = exams.get("finals_mcqs")
-        if not course_code:
-            raise ValueError("IA payload exams.course_code must not be empty")
-        if not isinstance(midterm_mcqs, list) or not isinstance(finals_mcqs, list):
-            raise ValueError("IA payload exams.midterm_mcqs and exams.finals_mcqs must be present (50 MCQs each)")
-
-        parts.append(
-            render_exam(
-                templates_dir / IA_TEMPLATE_FILES["midterm"],
-                course_code=course_code,
-                course_title=course_title,
-                mcqs=midterm_mcqs,
+        parts = [
+            render_front_page(templates_dir / IA_TEMPLATE_FILES["front_page"], payload),
+            render_ia_plan(templates_dir / IA_TEMPLATE_FILES["ia_plan"], payload),
+            render_specific_instructions(templates_dir / IA_TEMPLATE_FILES["specific_instructions"], payload),
+            render_oral_questions(templates_dir / IA_TEMPLATE_FILES["oral_questions"], payload),
+        ]
+        if tos_snapshot_path:
+            parts.append(
+                render_tos_snapshot_page(
+                    tos_snapshot_path,
+                    term=term,
+                    course_code=course_code,
+                    course_title=course_title,
+                )
             )
-        )
         parts.append(
             render_exam(
-                templates_dir / IA_TEMPLATE_FILES["finals"],
+                templates_dir / IA_TEMPLATE_FILES[template_key],
                 course_code=course_code,
                 course_title=course_title,
-                mcqs=finals_mcqs,
+                term=exam_term,
+                mcqs=mcqs,
             )
         )
 
@@ -441,7 +466,6 @@ def assemble_ia(payload_path, output_path, templates_dir="templates/IA TEMPLATES
         base_doc = Document(base_path)
         composer = Composer(base_doc)
         for part in parts[1:]:
-            # Ensure each template starts on a new page.
             breaker = composer.doc.add_paragraph().add_run()
             breaker.add_break(WD_BREAK.PAGE)
             part_path = temp_dir / f"part_{len(composer.doc.paragraphs)}.docx"
@@ -454,9 +478,9 @@ def assemble_ia(payload_path, output_path, templates_dir="templates/IA TEMPLATES
 
 def main(argv):
     if len(argv) < 3:
-        print("Usage: python tools/assemble_ia.py <payload.json> <output.docx>", file=sys.stderr)
+        print("Usage: python tools/assemble_ia_term.py <payload.json> <output.docx>", file=sys.stderr)
         return 2
-    assemble_ia(argv[1], argv[2])
+    assemble_ia_term(argv[1], argv[2])
     return 0
 
 

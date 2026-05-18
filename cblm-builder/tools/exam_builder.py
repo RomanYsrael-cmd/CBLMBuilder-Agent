@@ -283,7 +283,16 @@ def normalize_all_runs_font(doc_part):
                 normalize_all_runs_font(cell)
 
 
-def fill_exam_template(template_path: Path, output_path: Path, *, course_code: str, course_title: str, term: str, mcqs: list[MCQ]) -> None:
+def fill_exam_template(
+    template_path: Path,
+    output_path: Path,
+    *,
+    course_code: str,
+    course_title: str,
+    term: str,
+    mcqs: list[MCQ],
+    include_answer_key: bool = False,
+) -> None:
     doc = Document(template_path)
     enforce_document_font(doc)
 
@@ -330,6 +339,20 @@ def fill_exam_template(template_path: Path, output_path: Path, *, course_code: s
     for idx in range(len(mcqs), len(cells)):
         mapping = {"Q_NUM": "", "QUESTION": "", "Q_CHOICE1": "", "Q_CHOICE2": "", "Q_CHOICE3": "", "Q_CHOICE4": ""}
         replace_placeholders_in_cell(cells[idx], mapping)
+
+    if include_answer_key:
+        doc.add_page_break()
+        heading = doc.add_paragraph()
+        heading.style = doc.styles["Heading 1"] if "Heading 1" in doc.styles else None
+        heading.add_run("MODEL ANSWER KEY")
+
+        key_table = doc.add_table(rows=25, cols=2)
+        key_table.style = question_table.style
+        for row_index in range(25):
+            left = row_index + 1
+            right = row_index + 26
+            key_table.rows[row_index].cells[0].text = f"{left}. {mcqs[left - 1].answer.strip().upper()}"
+            key_table.rows[row_index].cells[1].text = f"{right}. {mcqs[right - 1].answer.strip().upper()}"
 
     normalize_all_runs_font(doc)
     output_path.parent.mkdir(parents=True, exist_ok=True)

@@ -7,6 +7,7 @@ from pathlib import Path
 
 from docx import Document
 from docxcompose.composer import Composer
+from ia_oral_questions import build_oral_questions_from_payload
 
 
 INBOX_DIR = Path("inbox")
@@ -336,31 +337,8 @@ def _build_ia_block(payload: dict, *, unit_index: int, prior_question_texts: lis
     if any("diagram" in t.lower() or "model" in t.lower() or "flow" in t.lower() for t in picks):
         materials.append("Diagramming tool (e.g., draw.io, Visio, or equivalent)")
 
-    def make_oral_questions(p: list[str]) -> list[dict]:
-        return [
-            {
-                "question": f"Explain {p[0]} and give one practical workplace example of its use.",
-                "acceptable_answer": f"Correctly describes {p[0]} and provides a realistic workplace example aligned to the unit context.",
-            },
-            {
-                "question": f"Describe the main steps or process you would follow to address {p[1]}.",
-                "acceptable_answer": f"Outlines a logical sequence of steps for {p[1]} and mentions checks/validation to ensure correctness.",
-            },
-            {
-                "question": f"What is one common mistake related to {p[2]} and how would you prevent it?",
-                "acceptable_answer": f"Identifies a plausible error for {p[2]} and gives a practical prevention method (checklist, review, validation, documentation).",
-            },
-            {
-                "question": f"Differentiate {p[3]} from {p[4]} based on purpose or application.",
-                "acceptable_answer": f"States a clear difference between {p[3]} and {p[4]} and explains when each would be used.",
-            },
-            {
-                "question": "How do you ensure your evidence/output meets the required performance criteria for this unit?",
-                "acceptable_answer": "Explains checking against the IA plan/criteria, validating outputs for completeness and correctness, and documenting evidence clearly.",
-            },
-        ]
-
-    oral_questions = make_oral_questions(picks)
+    payload["current_unit"]["ia"] = payload["current_unit"].get("ia") or {}
+    oral_questions = build_oral_questions_from_payload(payload)
     # Guardrails: enforce uniqueness and anchor coverage; retry a few times with different offsets if needed.
     def questions_ok(qs: list[dict]) -> bool:
         texts = [q.get("question", "") for q in qs]
@@ -387,7 +365,7 @@ def _build_ia_block(payload: dict, *, unit_index: int, prior_question_texts: lis
     while attempt < 3 and (picks[0].lower() in used_project_anchors or not questions_ok(oral_questions)):
         attempt += 1
         picks = pick_titles(5, offset=base_offset + (attempt * 7))
-        oral_questions = make_oral_questions(picks)
+        oral_questions = build_oral_questions_from_payload(payload)
         project_name = f"{project_core} Evidence Portfolio: {picks[0]}"
     if picks[0].lower() in used_project_anchors or not questions_ok(oral_questions):
         raise RuntimeError("IA guardrails failed: could not produce unique, content-anchored oral questions/project for this unit.")

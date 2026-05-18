@@ -240,6 +240,10 @@ def is_noise_subtopic(text: str) -> bool:
     if not lower:
         return True
     noise_values = {
+        "subtopics",
+        "subtopics:",
+        "activity",
+        "activity:",
         "interactive",
         "discussion",
         "interactive discussion",
@@ -286,6 +290,49 @@ def concise_focus_text(text: str, *, max_words: int = 12) -> str:
     if len(words) > max_words:
         cleaned = " ".join(words[:max_words]).strip()
     return cleaned.rstrip(".,;:-")
+
+
+def lower_first(text: str) -> str:
+    text = normalize_spaces(text)
+    if not text:
+        return ""
+    return text[:1].lower() + text[1:]
+
+
+def competency_phrase(text: str) -> str:
+    text = normalize_spaces(text)
+    if not text:
+        return "perform the required task"
+    lower = text.lower()
+    starters = [
+        "apply ",
+        "work with ",
+        "examine ",
+        "explain ",
+        "create ",
+        "transition ",
+        "introduce ",
+        "build ",
+        "design ",
+        "analyze ",
+        "use ",
+        "develop ",
+    ]
+    for starter in starters:
+        if lower.startswith(starter):
+            tail = text[len(starter) :].strip()
+            if tail:
+                return f"{starter.strip()} {lower_first(tail)}"
+    return f"work with {lower_first(text)}"
+
+
+def option_phrase(text: str, *, mode: str) -> str:
+    focus = competency_phrase(text)
+    if mode == "knowledge":
+        return f"Focuses on how to {focus}."
+    if mode == "comprehension":
+        return f"Explains when and why to {focus}."
+    return f"Uses the correct procedure to {focus} in practice."
 
 
 def parse_table_style_topics(
@@ -602,6 +649,56 @@ def parse_syllabus(text: str) -> Syllabus:
             i = j + 1
             continue
 
+        parsed_topic = is_topic_line(norm)
+        if current_uc_index is not None and parsed_topic:
+            topic_title = parsed_topic[1]
+            topic_index = len([t for t in topics if t.uc_index == current_uc_index]) + 1
+            active_term = pending_term
+            active_weeks = pending_weeks
+            pending_weeks = None
+
+            subtopics: list[str] = []
+            j = i + 1
+            while j < len(lines):
+                nxt = normalize_spaces(lines[j])
+                if not nxt:
+                    j += 1
+                    continue
+                nxt_lower = nxt.lower()
+                if is_lo_inline(nxt) or is_lo_line(nxt) or is_session_header(nxt) or is_topic_line(nxt):
+                    break
+                if is_week_line(nxt) is not None:
+                    break
+                if nxt_lower in {"subtopics", "subtopics:"}:
+                    j += 1
+                    continue
+                if nxt_lower.startswith("activity") or nxt_lower.startswith("let") or nxt_lower in method_markers:
+                    break
+                cleaned = clean_bullet(nxt)
+                if cleaned and not is_noise_subtopic(cleaned):
+                    subtopics.append(cleaned)
+                j += 1
+
+            if not subtopics:
+                subtopics = infer_subtopics_from_title(topic_title)
+                if not subtopics:
+                    i += 1
+                    continue
+
+            topics.append(
+                TopicSpec(
+                    uc_index=current_uc_index,
+                    uc_title=current_uc_title,
+                    topic_index=topic_index,
+                    title=topic_title,
+                    subtopics=subtopics,
+                    explicit_term=active_term,
+                    explicit_weeks=active_weeks,
+                )
+            )
+            i = j
+            continue
+
         if looks_like_topic_title(i, current_uc_index):
             topic_title = norm
             topic_index = len([t for t in topics if t.uc_index == current_uc_index]) + 1
@@ -618,6 +715,8 @@ def parse_syllabus(text: str) -> Syllabus:
                     continue
                 nxt_lower = nxt.lower()
                 if is_lo_inline(nxt) or is_lo_line(nxt) or is_session_header(nxt):
+                    break
+                if is_topic_line(nxt):
                     break
                 if is_week_line(nxt) is not None:
                     break
@@ -792,22 +891,63 @@ def compute_item_counts(days: list[int], total_items: int, rng: random.Random) -
     return counts
 
 
+def allocate_counts_with_caps(target: int, caps: list[int], rng: random.Random) -> list[int]:
+    if target < 0:
+        raise ValueError("Allocation target cannot be negative.")
+    if target == 0:
+        return [0 for _ in caps]
+    if sum(caps) < target:
+        raise ValueError("Allocation target exceeds available capacity.")
+
+    total_cap = sum(caps)
+    provisional: list[int] = []
+    fractions: list[tuple[float, int]] = []
+    assigned = 0
+    for index, cap in enumerate(caps):
+        if cap <= 0:
+            provisional.append(0)
+            fractions.append((0.0, index))
+            continue
+        raw = target * cap / total_cap
+        base = min(cap, int(raw))
+        provisional.append(base)
+        fractions.append((raw - base, index))
+        assigned += base
+
+    remaining = target - assigned
+    if remaining > 0:
+        for _, index in sorted(fractions, key=lambda item: (item[0], rng.random()), reverse=True):
+            if remaining <= 0:
+                break
+            if provisional[index] >= caps[index]:
+                continue
+            provisional[index] += 1
+            remaining -= 1
+
+    while remaining > 0:
+        candidates = [i for i, cap in enumerate(caps) if provisional[i] < cap]
+        if not candidates:
+            raise ValueError("Could not complete capped allocation.")
+        chosen = rng.choice(candidates)
+        provisional[chosen] += 1
+        remaining -= 1
+
+    return provisional
+
+
 def distribute_level_counts(topic_item_counts: list[int], term_name: str, rng: random.Random) -> list[tuple[int, int, int]]:
     combined_ratio = 0.30 if term_name == "MIDTERM" else 0.20
-    combined_counts = [round(count * combined_ratio) for count in topic_item_counts]
-    target_total = round(sum(topic_item_counts) * combined_ratio)
+    total_items = sum(topic_item_counts)
+    kc_target = round(total_items * combined_ratio)
+    knowledge_target = (kc_target + 1) // 2
+    comprehension_target = kc_target // 2
 
-    while sum(combined_counts) > target_total:
-        candidates = [i for i, count in enumerate(combined_counts) if count > 0]
-        combined_counts[rng.choice(candidates)] -= 1
-    while sum(combined_counts) < target_total:
-        candidates = [i for i, count in enumerate(topic_item_counts) if combined_counts[i] < count]
-        combined_counts[rng.choice(candidates)] += 1
+    knowledge_counts = allocate_counts_with_caps(knowledge_target, topic_item_counts, rng)
+    remaining_caps = [total - knowledge for total, knowledge in zip(topic_item_counts, knowledge_counts, strict=True)]
+    comprehension_counts = allocate_counts_with_caps(comprehension_target, remaining_caps, rng)
 
     out: list[tuple[int, int, int]] = []
-    for total, kc_total in zip(topic_item_counts, combined_counts, strict=True):
-        knowledge = (kc_total + 1) // 2
-        comprehension = kc_total // 2
+    for total, knowledge, comprehension in zip(topic_item_counts, knowledge_counts, comprehension_counts, strict=True):
         application = total - knowledge - comprehension
         out.append((knowledge, comprehension, application))
     return out
@@ -1120,15 +1260,23 @@ def generate_exam_items_for_topic(
     subtopics = plan.subtopics or [plan.title]
     clean_subtopics = [concise_focus_text(s) for s in subtopics]
     items: list[dict] = []
-    context_shift = rng.randrange(8)
-    goal_shift = rng.randrange(10)
-    voice_shift = rng.randrange(6)
-
     def focus_phrase(index: int, *, mode: str = "mixed") -> str:
         primary = clean_subtopics[index % len(clean_subtopics)]
-        if len(clean_subtopics) == 1:
-            return primary
         if mode == "single":
+            if len(clean_subtopics) == 1:
+                singles = [
+                    primary,
+                    f"the concept of {primary}",
+                    f"the use of {primary}",
+                    f"the role of {primary}",
+                    f"the correct application of {primary}",
+                    f"the practical use of {primary}",
+                    f"the correct procedure for {primary}",
+                    f"the main purpose of {primary}",
+                    f"the proper use of {primary}",
+                    f"the key idea behind {primary}",
+                ]
+                return singles[index % len(singles)]
             singles = [
                 primary,
                 f"the concept of {primary}",
@@ -1136,6 +1284,8 @@ def generate_exam_items_for_topic(
                 f"the role of {primary}",
             ]
             return singles[index % len(singles)]
+        if len(clean_subtopics) == 1:
+            return primary
         secondary = clean_subtopics[(index + 1) % len(clean_subtopics)]
         if normalize_spaces(primary).lower() == normalize_spaces(secondary).lower():
             return primary
@@ -1148,7 +1298,9 @@ def generate_exam_items_for_topic(
         return variants[index % len(variants)]
 
     def add_item(level: str, question: str, correct: str) -> None:
-        choices, answer = choice_pack(correct, distinct_distractors(distractor_pool, correct, rng), rng)
+        correct_choice = option_phrase(correct, mode=level)
+        distractor_choices = [option_phrase(item, mode=level) for item in distinct_distractors(distractor_pool, correct, rng)]
+        choices, answer = choice_pack(correct_choice, distractor_choices, rng)
         items.append(
             {
                 "question": question,
@@ -1163,116 +1315,70 @@ def generate_exam_items_for_topic(
         )
 
     knowledge_stems = [
-        "Which statement accurately defines {subject} when analyzing {topic} in a {context} focused on {goal}?",
-        "In a {context}, what does {subject} refer to within {topic} when attention is on {goal}?",
-        "Which description best fits {subject} for {topic} during a {context} dealing with {goal}?",
-        "When reviewing {topic} in a {context}, which concept corresponds to {subject} for {goal}?",
-        "During a {context} related to {topic}, which statement best defines {subject} while supporting {goal}?",
-        "Which idea best explains {subject} as part of {topic} in a {context} aimed at {goal}?",
+        "Which statement best describes the competency covered in {subject} during the lesson on {area}?",
+        "A student is reviewing {area}. Which option correctly identifies what {subject} is about?",
+        "Which idea best represents the lesson focus of {subject} in {area}?",
+        "When studying {area}, which statement best defines {subject}?",
+        "Which option best summarizes the skill expected in {subject} under {area}?",
+        "During class discussion on {area}, which statement best explains the focus of {subject}?",
     ]
     comprehension_stems = [
-        "Why does {subject} matter when {topic} is being evaluated in a {context} for {goal}?",
-        "Which statement best explains the role of {subject} in {topic} during a {context} about {goal}?",
-        "How does {subject} influence decisions about {topic} in a {context} centered on {goal}?",
-        "Which option best explains how {subject} affects work involving {topic} in a {context} for {goal}?",
-        "Why is {subject} important when a {context} uses {topic} to achieve {goal}?",
-        "How does understanding {subject} improve {topic} decisions during a {context} focused on {goal}?",
+        "Why is {subject} important when students are learning {area}?",
+        "Which statement best explains why {subject} matters in {area}?",
+        "How does understanding {subject} improve a student's grasp of {area}?",
+        "Which explanation best shows the value of {subject} in the lesson on {area}?",
+        "Why should a student understand {subject} before moving further in {area}?",
+        "Which option best explains the purpose of {subject} in {area}?",
     ]
     application_stems = [
-        "Given a team working on {topic} to address {goal}, which action best uses {subject} during a {context}?",
-        "During a {context} focused on {goal}, which action applies {subject} correctly while working with {topic}?",
-        "Given a {context} involving {topic} and {goal}, which action applies {subject} most effectively?",
-        "Given a real task involving {topic} in a {context} about {goal}, which action best applies {subject}?",
-        "Given a {context} where {topic} must support {goal}, which action uses {subject} most effectively?",
-        "Given a system review highlighting {goal} in work involving {topic}, which action uses {subject} most appropriately during a {context}?",
-        "Given work to improve {topic} for {goal}, which action shows the strongest practical use of {subject} in a {context}?",
-        "In a {context} where {topic} must be carried out for {goal}, which action best handles {subject}?",
-        "A team is using {topic} during a {context}; which action applies {subject} correctly to maintain {goal}?",
+        "During {context} in {area}, which action best shows correct use of {subject} for {goal}?",
+        "A student is working on {area} during {context}. Which step best applies {subject} to achieve {goal}?",
+        "In a practical task about {area} during {context}, which action best demonstrates {subject} while addressing {goal}?",
+        "During a classroom exercise in {area} for {goal}, which response most clearly applies {subject} while {context}?",
+        "A learner is solving a problem in {area} during {context}. Which action best uses {subject} to support {goal}?",
+        "In a hands-on assessment for {area} while {context}, which step best demonstrates {subject} while working toward {goal}?",
+        "A student is asked to perform {area} during {context}. Which action best applies {subject} in order to maintain {goal}?",
+        "Which classroom action best uses {subject} during {context} in {area} to achieve {goal}?",
+        "In a skills check on {area} during {context}, which response shows the strongest practical use of {subject} for {goal}?",
     ]
     contexts = [
-        "workplace review",
-        "performance check",
-        "procedure setup",
-        "task briefing",
-        "team discussion",
-        "quality check",
-        "practical assessment",
-        "operations meeting",
+        "writing a short program",
+        "reviewing sample code",
+        "drawing a design solution",
+        "debugging a class activity",
+        "checking program behavior",
+        "planning a software solution",
+        "analyzing a case example",
+        "preparing a laboratory output",
     ]
     goals = [
-        "runtime efficiency",
-        "memory control",
-        "accurate output",
-        "system reliability",
-        "faster response time",
-        "clean implementation",
-        "fault isolation",
-        "resource balancing",
-        "scalable processing",
-        "consistent behavior",
+        "correct program behavior",
+        "clear software structure",
+        "better code reuse",
+        "safe error handling",
+        "accurate system modeling",
+        "proper object interaction",
+        "efficient execution",
+        "clean database access",
+        "maintainable design",
+        "clear architectural separation",
     ]
-    actions = [
-        "reviewing results",
-        "checking resource usage",
-        "solving a performance issue",
-        "preparing a new implementation",
-        "verifying correct behavior",
-        "comparing alternative solutions",
-    ]
-    outcomes = [
-        "with minimal rework",
-        "without introducing extra errors",
-        "while keeping the process maintainable",
-        "while meeting the required constraints",
-        "with clear and predictable behavior",
-        "while preserving efficiency",
-    ]
-    considerations = [
-        "The team must document each decision clearly.",
-        "The process must remain easy for another developer to inspect.",
-        "The chosen approach must avoid wasting memory.",
-        "The final output must stay reliable under repeated use.",
-        "The solution must be simple to test before release.",
-        "The implementation must support later improvements.",
-        "The result must remain stable when input size increases.",
-        "The team must justify why this approach is better than the alternatives.",
-        "The workflow must still be understandable during troubleshooting.",
-        "The selected method must fit the available system resources.",
-    ]
-    scenario_hooks = [
-        "A supervisor is reviewing the result.",
-        "A trainee must justify the chosen step.",
-        "A team member needs a clear basis for the decision.",
-        "The task will be checked against store procedures.",
-        "The output will be compared with a previous report.",
-        "The activity must still make sense to another worker.",
-    ]
-
     for idx in range(plan.knowledge_count):
         subject = focus_phrase(idx, mode="single")
         stem = knowledge_stems[(idx + plan.topic_index) % len(knowledge_stems)]
-        context = contexts[(idx + context_shift) % len(contexts)]
-        goal = goals[(idx + plan.uc_index + plan.topic_index + goal_shift) % len(goals)]
-        add_item("knowledge", stem.format(subject=subject, topic=plan.title, context=context, goal=goal), clean_subtopics[idx % len(clean_subtopics)])
+        add_item("knowledge", stem.format(subject=subject, area=plan.title), clean_subtopics[idx % len(clean_subtopics)])
 
     for idx in range(plan.comprehension_count):
         subject = focus_phrase(idx + 1, mode="single")
         stem = comprehension_stems[(idx + plan.uc_index) % len(comprehension_stems)]
-        context = contexts[(idx + 2 + plan.topic_index + context_shift) % len(contexts)]
-        goal = goals[(idx + 3 + plan.uc_index + goal_shift) % len(goals)]
-        add_item("comprehension", stem.format(subject=subject, topic=plan.title, context=context, goal=goal), clean_subtopics[idx % len(clean_subtopics)])
+        add_item("comprehension", stem.format(subject=subject, area=plan.title), clean_subtopics[idx % len(clean_subtopics)])
 
     for idx in range(plan.application_count):
         subject = focus_phrase(idx + 2, mode="single" if len(clean_subtopics) <= 4 else "mixed")
         stem = application_stems[(idx + plan.uc_index + plan.topic_index) % len(application_stems)]
-        context = contexts[(idx + 4 + plan.uc_index + context_shift) % len(contexts)]
-        goal = goals[(idx + 5 + plan.topic_index + goal_shift) % len(goals)]
-        action = actions[(idx + voice_shift) % len(actions)]
-        outcome = outcomes[(idx + plan.topic_index + voice_shift) % len(outcomes)]
-        consideration = considerations[(idx + plan.uc_index + plan.topic_index + goal_shift) % len(considerations)]
-        hook = scenario_hooks[(idx + plan.uc_index + voice_shift) % len(scenario_hooks)]
-        question = stem.format(subject=subject, topic=plan.title, context=context, goal=goal)
-        question = f"{hook} {question[:-1]} while {action} {outcome}? {consideration}"
+        context = contexts[(idx + plan.topic_index + plan.uc_index) % len(contexts)]
+        goal = goals[(idx + plan.uc_index + len(clean_subtopics)) % len(goals)]
+        question = stem.format(subject=subject, area=plan.title, context=context, goal=goal)
         add_item("application", question, clean_subtopics[idx % len(clean_subtopics)])
 
     return items
@@ -1292,6 +1398,22 @@ def generate_exam_for_term(term_name: str, term_plans: list[TermTopicPlan], seed
         for plan in term_plans:
             pool = build_distractor_pool(term_plans, plan)
             mcqs.extend(generate_exam_items_for_topic(plan, rng=rng, distractor_pool=pool))
+        seen_questions: dict[str, int] = {}
+        variant_phrases = [
+            "Choose the best answer based on the lesson focus.",
+            "Select the most appropriate response for the situation.",
+            "Base your answer on correct classroom practice.",
+            "Pick the response that best matches the required skill.",
+            "Consider the most accurate practical response.",
+        ]
+        for item in mcqs:
+            key = exam_builder.normalize(item["question"])
+            count = seen_questions.get(key, 0)
+            if count:
+                phrase = variant_phrases[(count - 1) % len(variant_phrases)]
+                item["question"] = f"{item['question']} {phrase}"
+                key = exam_builder.normalize(item["question"])
+            seen_questions[key] = seen_questions.get(key, 0) + 1
         if len(mcqs) != 50:
             raise ValueError(f"{term_name} exam generation produced {len(mcqs)} items instead of 50.")
         try:

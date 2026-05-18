@@ -4,6 +4,7 @@ import subprocess
 from pathlib import Path
 
 from build_tos_and_exam_from_syllabus import parse_syllabus, read_single_syllabus_from_inbox, read_syllabus_text, safe_filename
+from ia_oral_questions import build_oral_questions_from_payload
 
 
 STATE_IA_DIR = Path("state") / "ia_payloads"
@@ -17,7 +18,7 @@ def build_ia_payload(*, course_title: str, topics: list[dict], exams: dict) -> d
         contents = [{"index": cidx, "title": subtopic} for cidx, subtopic in enumerate(topic["subtopics"], start=1)]
         learning_outcomes.append({"index": idx, "title": lo_title, "contents": contents})
 
-    return {
+    payload = {
         "qualification_title": course_title,
         "current_unit": {
             "unit_of_competency": "",
@@ -28,6 +29,8 @@ def build_ia_payload(*, course_title: str, topics: list[dict], exams: dict) -> d
         },
         "exams": exams,
     }
+    payload["current_unit"]["ia"]["oral_questions"] = build_oral_questions_from_payload(payload)
+    return payload
 
 
 def load_exam_state(path: Path) -> list[dict]:

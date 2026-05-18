@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 from docx import Document
+from ia_oral_questions import build_oral_questions_from_payload
 
 
 INBOX_DIR = Path("inbox")
@@ -156,28 +157,7 @@ def _build_ia_block(payload: dict) -> dict:
                 "Access to references or handouts provided by the trainer",
             ]
         ),
-        "oral_questions": [
-            {
-                "question": "State the main objective of this unit and why it is important in workplace practice.",
-                "acceptable_answer": "Explains the unit objective and connects it to accurate, consistent, and ethical workplace performance.",
-            },
-            {
-                "question": "What safety, confidentiality, or quality controls should be applied during the activity?",
-                "acceptable_answer": "Mentions relevant controls such as validation, documentation, access control, safe work practices, and checking outputs for accuracy.",
-            },
-            {
-                "question": "What common error can occur while performing this task and how will you prevent it?",
-                "acceptable_answer": "Identifies a plausible error and gives a practical prevention step such as cross-checking inputs, using checklists, or reviewing outputs.",
-            },
-            {
-                "question": "How do you know your output meets the required performance criteria?",
-                "acceptable_answer": "References checking against criteria, using a checklist/rubric, verifying completeness and correctness, and confirming with the assessor when needed.",
-            },
-            {
-                "question": "If requirements change, what is your process for updating your work without losing quality?",
-                "acceptable_answer": "Explains versioning, documenting changes, re-validating outputs, and communicating updates to stakeholders.",
-            },
-        ],
+        "oral_questions": build_oral_questions_from_payload(payload),
         "interview_questions": [
             "Explain the reasoning behind the steps you followed during the activity.",
             "What assumptions did you make, and how would you verify them in an actual workplace?",
@@ -255,4 +235,3 @@ def main(argv: list[str]) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv))
-

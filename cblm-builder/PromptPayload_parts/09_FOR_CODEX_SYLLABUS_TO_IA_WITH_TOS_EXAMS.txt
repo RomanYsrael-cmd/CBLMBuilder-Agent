@@ -129,6 +129,11 @@ IA rule:
 
 - The course-level IA package comes from the completed unit payloads / unit outputs.
 - This produces the IA package using the existing IA templates and course-level IA workflow.
+- The IA package must include the `05_iaquestionwithanswer.docx` section populated from `current_unit.ia.oral_questions`.
+- `current_unit.ia.oral_questions` must be an array of exactly 5 objects:
+  - `question`
+  - `acceptable_answer`
+- The 5 oral questions must be related to the syllabus/unit topics and include acceptable answers appropriate for assessor use.
 - Do not modify the IA templates unless explicitly requested.
 
 TOS-aligned exam rule:

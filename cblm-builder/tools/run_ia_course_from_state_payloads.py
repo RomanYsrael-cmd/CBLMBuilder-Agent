@@ -7,6 +7,8 @@ from pathlib import Path
 
 import importlib.util
 
+from ia_oral_questions import build_oral_questions_from_payload
+
 
 STATE_PAYLOADS_DIR = Path("state") / "payloads"
 STATE_IA_DIR = Path("state") / "ia_payloads"
@@ -76,7 +78,7 @@ def build_course_ia_payload(payloads: list[dict], *, qualification_title: str) -
             learning_outcomes.append({"index": y, "title": merged_title, "contents": contents})
             y += 1
 
-    return {
+    payload = {
         "qualification_title": qualification_title,
         "current_unit": {
             # assemble_ia requires current_unit with learning_outcomes.
@@ -87,6 +89,8 @@ def build_course_ia_payload(payloads: list[dict], *, qualification_title: str) -
             "ia": {},
         },
     }
+    payload["current_unit"]["ia"]["oral_questions"] = build_oral_questions_from_payload(payload)
+    return payload
 
 
 def main() -> int:
