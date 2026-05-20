@@ -1,4 +1,5 @@
 import json
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -220,6 +221,7 @@ def render_specific_instructions(template_path, payload):
             "qualification_title": payload.get("qualification_title", ""),
             "term": term,
             "TERM": term,
+            "page_count": payload.get("page_count", ""),
         },
     )
     normalize_all_runs_font(doc)
@@ -409,6 +411,125 @@ def render_tos_snapshot_page(image_path, *, term: str, course_code: str, course_
     return doc
 
 
+_ONES = {
+    0: "zero",
+    1: "one",
+    2: "two",
+    3: "three",
+    4: "four",
+    5: "five",
+    6: "six",
+    7: "seven",
+    8: "eight",
+    9: "nine",
+    10: "ten",
+    11: "eleven",
+    12: "twelve",
+    13: "thirteen",
+    14: "fourteen",
+    15: "fifteen",
+    16: "sixteen",
+    17: "seventeen",
+    18: "eighteen",
+    19: "nineteen",
+}
+
+_TENS = {
+    20: "twenty",
+    30: "thirty",
+    40: "forty",
+    50: "fifty",
+    60: "sixty",
+    70: "seventy",
+    80: "eighty",
+    90: "ninety",
+}
+
+
+def int_to_words(value: int) -> str:
+    if value < 0:
+        return f"minus {int_to_words(-value)}"
+    if value < 20:
+        return _ONES[value]
+    if value < 100:
+        tens = (value // 10) * 10
+        remainder = value % 10
+        return _TENS[tens] if remainder == 0 else f"{_TENS[tens]}-{_ONES[remainder]}"
+    if value < 1000:
+        hundreds = value // 100
+        remainder = value % 100
+        head = f"{_ONES[hundreds]} hundred"
+        return head if remainder == 0 else f"{head} {int_to_words(remainder)}"
+    if value < 1_000_000:
+        thousands = value // 1000
+        remainder = value % 1000
+        head = f"{int_to_words(thousands)} thousand"
+        return head if remainder == 0 else f"{head} {int_to_words(remainder)}"
+    raise ValueError(f"Page count too large to format: {value}")
+
+
+def format_page_count(value: int) -> str:
+    return f"{int_to_words(value)} ({value})"
+
+
+def compute_docx_page_count(docx_path: Path) -> int:
+    command = f"""
+$ErrorActionPreference = 'Stop'
+$word = $null
+$doc = $null
+try {{
+  $word = New-Object -ComObject Word.Application
+  $word.Visible = $false
+  $word.DisplayAlerts = 0
+  $doc = $word.Documents.Open('{str(docx_path.resolve()).replace("'", "''")}', $false, $true)
+  $pages = $doc.ComputeStatistics(2)
+  Write-Output $pages
+}} finally {{
+  if ($doc -ne $null) {{
+    try {{ $doc.Close($false) }} catch {{}}
+  }}
+  if ($word -ne $null) {{
+    try {{ $word.Quit() }} catch {{}}
+  }}
+}}
+""".strip()
+    result = subprocess.run(
+        ["powershell", "-NoProfile", "-NonInteractive", "-Command", command],
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    if result.returncode != 0:
+        if result.stdout:
+            print(result.stdout, file=sys.stderr)
+        if result.stderr:
+            print(result.stderr, file=sys.stderr)
+        raise RuntimeError(f"Failed to compute page count for {docx_path}")
+    output = (result.stdout or "").strip().splitlines()
+    if not output:
+        raise RuntimeError(f"Word did not return a page count for {docx_path}")
+    try:
+        pages = int(output[-1].strip())
+    except ValueError as exc:
+        raise RuntimeError(f"Unexpected page count output for {docx_path}: {result.stdout!r}") from exc
+    return max(pages, 1)
+
+
+def build_ia_term_doc(output_path: Path, parts: list[Document], *, temp_dir: Path) -> None:
+    base_path = temp_dir / "000_ia_base.docx"
+    parts[0].save(base_path)
+    base_doc = Document(base_path)
+    composer = Composer(base_doc)
+    for index, part in enumerate(parts[1:], start=1):
+        breaker = composer.doc.add_paragraph().add_run()
+        breaker.add_break(WD_BREAK.PAGE)
+        part_path = temp_dir / f"part_{index:03d}.docx"
+        part.save(part_path)
+        composer.append(Document(part_path))
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    composer.save(str(output_path))
+
+
 def assemble_ia_term(payload_path, output_path, templates_dir="templates/IA TEMPLATES"):
     payload_path = Path(payload_path)
     output_path = Path(output_path)
@@ -435,45 +556,42 @@ def assemble_ia_term(payload_path, output_path, templates_dir="templates/IA TEMP
 
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_dir = Path(temp_dir)
+        final_page_count = ""
+        for _ in range(3):
+            working_payload = dict(payload)
+            if final_page_count:
+                working_payload["page_count"] = final_page_count
 
-        parts = [
-            render_front_page(templates_dir / IA_TEMPLATE_FILES["front_page"], payload),
-            render_ia_plan(templates_dir / IA_TEMPLATE_FILES["ia_plan"], payload),
-            render_specific_instructions(templates_dir / IA_TEMPLATE_FILES["specific_instructions"], payload),
-            render_oral_questions(templates_dir / IA_TEMPLATE_FILES["oral_questions"], payload),
-        ]
-        if tos_snapshot_path:
+            parts = [
+                render_front_page(templates_dir / IA_TEMPLATE_FILES["front_page"], working_payload),
+                render_ia_plan(templates_dir / IA_TEMPLATE_FILES["ia_plan"], working_payload),
+                render_specific_instructions(templates_dir / IA_TEMPLATE_FILES["specific_instructions"], working_payload),
+                render_oral_questions(templates_dir / IA_TEMPLATE_FILES["oral_questions"], working_payload),
+            ]
+            if tos_snapshot_path:
+                parts.append(
+                    render_tos_snapshot_page(
+                        tos_snapshot_path,
+                        term=term,
+                        course_code=course_code,
+                        course_title=course_title,
+                    )
+                )
             parts.append(
-                render_tos_snapshot_page(
-                    tos_snapshot_path,
-                    term=term,
+                render_exam(
+                    templates_dir / IA_TEMPLATE_FILES[template_key],
                     course_code=course_code,
                     course_title=course_title,
+                    term=exam_term,
+                    mcqs=mcqs,
                 )
             )
-        parts.append(
-            render_exam(
-                templates_dir / IA_TEMPLATE_FILES[template_key],
-                course_code=course_code,
-                course_title=course_title,
-                term=exam_term,
-                mcqs=mcqs,
-            )
-        )
 
-        base_path = temp_dir / "000_ia_base.docx"
-        parts[0].save(base_path)
-        base_doc = Document(base_path)
-        composer = Composer(base_doc)
-        for part in parts[1:]:
-            breaker = composer.doc.add_paragraph().add_run()
-            breaker.add_break(WD_BREAK.PAGE)
-            part_path = temp_dir / f"part_{len(composer.doc.paragraphs)}.docx"
-            part.save(part_path)
-            composer.append(Document(part_path))
-
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        composer.save(str(output_path))
+            build_ia_term_doc(output_path, parts, temp_dir=temp_dir)
+            measured = format_page_count(compute_docx_page_count(output_path))
+            if measured == final_page_count:
+                break
+            final_page_count = measured
 
 
 def main(argv):

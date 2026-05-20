@@ -223,6 +223,7 @@ def render_specific_instructions(template_path, payload):
         {
             "qualification": payload.get("qualification_title", ""),
             "qualification_title": payload.get("qualification_title", ""),
+            "page_count": payload.get("page_count", ""),
         },
     )
     normalize_all_runs_font(doc)
