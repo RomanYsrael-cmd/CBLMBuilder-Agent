@@ -145,6 +145,41 @@ This writes:
 - one IA payload JSON under `state/ia_payloads/<COURSE_CODE>/IA_FULL.json`
 - one IA DOCX under `output/ia/<COURSE_CODE>/IA_FULL.docx`
 
+## Alternate IA/TOS Flow (Prompt 10, No CBLM DOCX)
+
+If the active prompt is `PromptPayload_parts/10_FOR_CODEX_SYLLABUS_TO_IA_WITHOUT_CBLM.txt`, do not use the per-unit CBLM IA path above.
+
+Use this term-aware syllabus-to-IA/TOS workflow instead:
+- `.\.venv\Scripts\python.exe .\tools\build_tos_plan_from_syllabus.py`
+- `.\.venv\Scripts\python.exe .\tools\scaffold_term_ia_from_syllabus.py`
+- CODEX authors:
+  - `state/ia_payloads/<COURSE_CODE>/IA_MIDTERM.json`
+  - `state/ia_payloads/<COURSE_CODE>/IA_FINALS.json`
+  - `state/tos/<COURSE_CODE>/MIDTERM.json`
+  - `state/tos/<COURSE_CODE>/FINALS.json`
+- `.\.venv\Scripts\python.exe .\tools\render_exam_from_state.py ".\state\tos\<COURSE_CODE>\MIDTERM.json"`
+- `.\.venv\Scripts\python.exe .\tools\render_exam_from_state.py ".\state\tos\<COURSE_CODE>\FINALS.json"`
+- `.\.venv\Scripts\python.exe .\tools\render_term_ia_from_authored_state.py ".\state\ia_payloads\<COURSE_CODE>\IA_MIDTERM.json" ".\state\tos\<COURSE_CODE>\MIDTERM.json"`
+- `.\.venv\Scripts\python.exe .\tools\render_term_ia_from_authored_state.py ".\state\ia_payloads\<COURSE_CODE>\IA_FINALS.json" ".\state\tos\<COURSE_CODE>\FINALS.json"`
+
+Behavior requirements for this alternate flow:
+- do not generate any CBLM DOCX files
+- do not call `run_ia_course_from_state_payloads.py`
+- generate separate `MIDTERM` and `FINALS` IA packages directly from the syllabus
+- populate `{{term}}` in both `00_FrontPage.docx` and `02_iaspesificinstruction.docx`
+- populate `{{page_count}}` in `02_iaspesificinstruction.docx` from the final compiled term-specific IA itself
+- format `{{page_count}}` as `word (number)`, for example `twelve (12)`
+- include `05_iaquestionwithanswer.docx` before the term exam template during IA assembly
+- insert the TOS snapshot page before the term exam section when the term workbook exists
+
+Output shape for this alternate flow:
+- `output/ia/<COURSE_CODE>/IA_MIDTERM.docx`
+- `output/ia/<COURSE_CODE>/IA_FINALS.docx`
+- `output/tos/TOS_<COURSE_CODE>_MIDTERM.xlsx`
+- `output/tos/TOS_<COURSE_CODE>_FINALS.xlsx`
+- `output/exams/EXAM_<COURSE_CODE>_MIDTERM.docx`
+- `output/exams/EXAM_<COURSE_CODE>_FINALS.docx`
+
 ## Finalization
 
 - save outputs in `./output`

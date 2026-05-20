@@ -10,6 +10,12 @@ SOUL.md
 HEARTBEAT.md
 IDENTITY.md
 
+Important environment note:
+
+If `skills/cblm_generator/SKILL.md` exists, use it only for extraction discipline and workspace execution style.
+For this prompt, when any skill text conflicts with this no-CBLM workflow, this file takes precedence.
+Specifically, do NOT use the older course-IA path (`run_ia_course_from_state_payloads.py`) for this workflow.
+
 Env setup (PowerShell):
 
 If .env exists at repo root, load it into the current process environment (do NOT echo values):
@@ -111,6 +117,9 @@ Each term-specific IA payload must:
 - include the term value used by the front page template:
   - MIDTERM IA -> `term = MIDTERM`
   - FINALS IA -> `term = FINALS`
+- support the updated IA template placeholders:
+  - `{{term}}`
+  - `{{page_count}}`
 - include `current_unit.ia.oral_questions` as an array of exactly 5 objects:
   - `question`
   - `acceptable_answer`
@@ -148,6 +157,17 @@ IA template interpretation rule:
 - `{{term}}` on the front page template must be populated with the current term:
   - `MIDTERM`
   - `FINALS`
+- `{{term}}` in `templates/IA TEMPLATES/02_iaspesificinstruction.docx` must also be populated with the same current term value:
+  - `MIDTERM`
+  - `FINALS`
+- `{{page_count}}` in `templates/IA TEMPLATES/02_iaspesificinstruction.docx` must be computed from the fully compiled term-specific IA document itself:
+  - compile the IA for the current term first
+  - count the total number of pages in that compiled IA
+  - write the value in `word (number)` format
+  - example for 12 pages: `twelve (12)`
+- `{{page_count}}` must reflect the final compiled term IA page total for that term only:
+  - MIDTERM IA page count must come from the compiled MIDTERM IA
+  - FINALS IA page count must come from the compiled FINALS IA
 - `{{Y}}. {{LO}}` means:
   - `{{Y}}` = Learning Outcome number within the current term-specific IA payload
   - `{{LO}}` = the current Learning Outcome title
@@ -175,6 +195,10 @@ IA generation rule:
 - Save the FINALS IA payload under `state/ia_payloads/<COURSE_CODE>/IA_FINALS.json`.
 - Assemble `output/ia/<COURSE_CODE>/IA_MIDTERM.docx` using `tools/render_term_ia_from_authored_state.py`.
 - Assemble `output/ia/<COURSE_CODE>/IA_FINALS.docx` using `tools/render_term_ia_from_authored_state.py`.
+- Ensure the IA render/assembly path performs the required page-count pass for `{{page_count}}`:
+  - initial term-aware assembly
+  - page count measurement on the compiled term IA
+  - final rewrite with `{{page_count}}` populated in `word (number)` format
 - Do not require CBLM unit DOCX files as inputs for this workflow.
 
 TOS-aligned exam rule:

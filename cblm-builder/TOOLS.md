@@ -94,6 +94,12 @@ Create term-specific IA payload scaffolds from a syllabus without generating ora
 
 Use this when CODEX should author the oral questions directly.
 
+Behavior:
+- groups syllabus-derived topics into separate `MIDTERM` and `FINALS` payloads
+- writes top-level `term` as `MIDTERM` or `FINALS`
+- leaves `current_unit.ia.oral_questions` empty for CODEX to author directly
+- structures payloads for `tools/assemble_ia_term.py` rather than the older full-course IA path
+
 Outputs:
 - `state/ia_payloads/<COURSE_CODE>/IA_MIDTERM.json`
 - `state/ia_payloads/<COURSE_CODE>/IA_FINALS.json`
@@ -133,9 +139,31 @@ Validation behavior:
 - renders a TOS snapshot image from `output/tos/TOS_<COURSE_CODE>_<TERM>.xlsx` when available
 - inserts that TOS snapshot into the IA before the term exam section
 - appends the term exam plus its `MODEL ANSWER KEY` inside the term IA output
+- requires the IA payload top-level `term` to match the term state JSON exactly
+- hands off final assembly to `tools/assemble_ia_term.py`
 
 Example:
 `.\.venv\Scripts\python.exe .\tools\render_term_ia_from_authored_state.py ".\state\ia_payloads\<COURSE_CODE>\IA_MIDTERM.json" ".\state\tos\<COURSE_CODE>\MIDTERM.json"`
+
+### tools/assemble_ia_term.py
+Assemble one term-specific IA DOCX using the IA template sequence and a two-pass page-count fill.
+
+Behavior:
+- assembles in this order:
+  - `00_FrontPage.docx`
+  - `01_iaplan.docx`
+  - `02_iaspesificinstruction.docx`
+  - `05_iaquestionwithanswer.docx`
+  - optional TOS snapshot page
+  - `03_midterm.docx` or `04_finals.docx`
+- fills `{{term}}` from the IA payload top-level `term`
+- fills `{{page_count}}` in `02_iaspesificinstruction.docx`
+- computes page count from the compiled term IA DOCX itself using Word page statistics
+- rewrites until page count stabilizes
+- formats page count as `word (number)`, for example `twelve (12)`
+
+Example:
+`.\.venv\Scripts\python.exe .\tools\assemble_ia_term.py ".\state\ia_payloads\<COURSE_CODE>\IA_MIDTERM.json" ".\output\ia\<COURSE_CODE>\IA_MIDTERM.docx"`
 
 ### tools/exam_builder.py
 Build term exam DOCX files using `templates/EXAM TEMPLATE.docx` and MCQs sourced from unit payloads (`exercise_questions` per content item).
